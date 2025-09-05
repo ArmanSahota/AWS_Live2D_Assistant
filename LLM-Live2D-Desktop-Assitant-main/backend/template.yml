@@ -1,0 +1,272 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Live2D Assistant — minimal backend (HTTP /health + WebSocket echo + Claude HTTP)
+
+Parameters:
+  Env:
+    Type: String
+    Default: dev
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 15
+    MemorySize: 256
+    Tracing: Active
+
+Resources:
+  # ---------- Data ----------
+  ConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: connectionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: connectionId
+          KeyType: HASH
+      TableName: !Sub live2d-connections-${Env}
+
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: sessionId
+          KeyType: RANGE
+      TableName: !Sub live2d-sessions-${Env}
+
+  # ---------- Lambdas ----------
+  WSConnectionsFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Handles $connect/$disconnect; tracks connectionIds
+      Handler: index.lambda_handler
+      InlineCode: |
+        import os, boto3
+        ddb = boto3.resource("dynamodb")
+        table = ddb.Table(os.environ["TABLE_CONNECTIONS"])
+        def lambda_handler(event, context):
+            rc = event.get("requestContext", {})
+            route = rc.get("routeKey")
+            cid = rc.get("connectionId")
+            if route == "$connect":
+                table.put_item(Item={"connectionId": cid})
+                return {"statusCode": 200}
+            if route == "$disconnect":
+                table.delete_item(Key={"connectionId": cid})
+                return {"statusCode": 200}
+            return {"statusCode": 200}
+      Environment:
+        Variables:
+          TABLE_CONNECTIONS: !Ref ConnectionsTable
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+
+  OrchestratorFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: WS chat echo (stub) — streams two deltas + done
+      Handler: index.lambda_handler
+      InlineCode: |
+        import json, boto3
+        def lambda_handler(event, context):
+            rc = event["requestContext"]
+            domain = f"https://{rc['domainName']}/{rc['stage']}"
+            cid = rc["connectionId"]
+            api = boto3.client("apigatewaymanagementapi", endpoint_url=domain)
+            body = json.loads(event.get("body") or "{}")
+            txt = str(body.get("text") or "hello world")
+            mid = max(1, len(txt)//2)
+            api.post_to_connection(ConnectionId=cid, Data=json.dumps({"type":"assistant_text_delta","text":txt[:mid]}).encode())
+            api.post_to_connection(ConnectionId=cid, Data=json.dumps({"type":"assistant_text_delta","text":txt[mid:]}).encode())
+            api.post_to_connection(ConnectionId=cid, Data=json.dumps({"type":"assistant_done"}).encode())
+            return {"statusCode": 200}
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Env}/POST/@connections/*
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: HTTP /health endpoint
+      Handler: index.lambda_handler
+      InlineCode: |
+        import json
+        def lambda_handler(event, context):
+            return {"statusCode":200,"headers":{"content-type":"application/json"},"body":json.dumps({"status":"ok"})}
+      Policies:
+        - AWSLambdaBasicExecutionRole
+      Events:
+        Health:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /health
+
+  ClaudeHttpFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: HTTP POST /claude → invoke Bedrock Anthropic Claude
+      Handler: index.lambda_handler
+      InlineCode: |
+        import json, os, boto3
+        BEDROCK_REGION = os.environ.get("BEDROCK_REGION", os.environ.get("AWS_REGION", "us-west-2"))
+        MODEL_ID = os.environ.get("MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0")
+        bedrock = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+        def lambda_handler(event, context):
+            try:
+                body = json.loads(event.get("body") or "{}")
+                text = (body.get("text") or "").strip()
+                if not text:
+                    return {"statusCode": 400, "headers":{"content-type":"application/json"},
+                            "body": json.dumps({"error":"`text` is required"})}
+                payload = {
+                  "anthropic_version": "bedrock-2023-05-31",
+                  "max_tokens": 400,
+                  "messages": [ { "role":"user", "content":[{"type":"text","text": text}] } ]
+                }
+                resp = bedrock.invoke_model(
+                    modelId=MODEL_ID,
+                    contentType="application/json",
+                    accept="application/json",
+                    body=json.dumps(payload)
+                )
+                data = json.loads(resp["body"].read())
+                reply = data["content"][0]["text"]
+                return {"statusCode":200, "headers":{"content-type":"application/json"},
+                        "body": json.dumps({"reply": reply})}
+            except Exception as e:
+                return {"statusCode":500, "headers":{"content-type":"application/json"},
+                        "body": json.dumps({"error": str(e)})}
+      Environment:
+        Variables:
+          MODEL_ID: anthropic.claude-3-5-sonnet-20240620-v1:0
+          BEDROCK_REGION: us-west-2
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource: "*"   # tighten to specific model ARN later
+      Events:
+        ClaudeRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: POST
+            Path: /claude
+
+  # ---------- APIs ----------
+  WebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub live2d-ws-${Env}
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  WSConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WSConnectionsFn.Arn}/invocations
+
+  WSDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WSConnectionsFn.Arn}/invocations
+
+  WSChatIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OrchestratorFn.Arn}/invocations
+
+  WSRouteConnect:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $connect
+      AuthorizationType: NONE   # add Cognito/Lambda authorizer later
+      Target: !Sub integrations/${WSConnectIntegration}
+
+  WSRouteDisconnect:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      Target: !Sub integrations/${WSDisconnectIntegration}
+
+  WSRouteChat:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: chat
+      AuthorizationType: NONE
+      Target: !Sub integrations/${WSChatIntegration}
+
+  WSDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - WSRouteConnect
+      - WSRouteDisconnect
+      - WSRouteChat
+    Properties:
+      ApiId: !Ref WebSocketApi
+
+  WSStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: !Ref Env
+      ApiId: !Ref WebSocketApi
+      DeploymentId: !Ref WSDeployment
+
+  LambdaPermConnect:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref WSConnectionsFn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
+
+  LambdaPermChat:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OrchestratorFn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Env
+
+Outputs:
+  WSUrl:
+    Description: WebSocket URL
+    Value: !Sub wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Env}
+  HttpBase:
+    Description: HTTP API Base URL
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Env}

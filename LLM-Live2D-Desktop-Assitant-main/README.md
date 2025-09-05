@@ -1,0 +1,184 @@
+# LLM-Live2D-Desktop-Assitant
+## HTTP API Setup
+
+To use the Claude HTTP API:
+
+1. Set the HTTP_BASE environment variable in your `.env` file:
+   ```
+   VITE_HTTP_BASE=https://your-api-gateway-url.execute-api.us-west-2.amazonaws.com/dev
+   ```
+
+2. Or configure it in the Settings panel:
+   - Open the application
+   - Click "Settings" in the status bar
+   - Enter your HTTP Base URL in the HTTP Configuration section
+   - Click "Save HTTP Config"
+
+3. Test the connection:
+   - In the Settings panel, click "Test Cloud Health"
+   - You should see "Success! Status: ok" if the connection is working
+
+4. The status bar will show the cloud health status and when it was last checked.
+
+The HTTP API will be used for Claude interactions when available, while keeping the WebSocket functionality intact for future streaming capabilities.
+
+### Notice
+~~I'm currently working on the reconstruction co-work of the upstream repository (Open-LLM-Vtuber). Once the foundational reconstruction is complete, this repository (Electron version) will be updated accordingly.~~
+
+I may no longer update the repo because as I am transferring the Electron feature to the upstream repository. 
+You can directly utilize the desktop mode in the upstream repository.
+
+### 🤗Introduction
+
+Forked From [Open-LLM-VTuber](https://github.com/t41372/Open-LLM-VTuber) and made the following modifications / new features:
+
+- Integrate with Electron to be the **desktop partner**. The desktop-mode supports both Windows and MacOS.
+- Add **screen sensing** function and **clipboard content retrieval**.
+- Write an Elaina **persona prompt**.
+- Set the [Elaina(LSS)](https://www.aplaybox.com/details/model/0MAXIOhAZAUw) as the default **Live2D model** and create some **expressions and poses**.
+- Use [GPTSoVITS](https://github.com/RVC-Boss/GPT-SoVITS) as the TTS model to **clone Elaina's timbre**.
+- Improve `speak_by_sentence_chain` to **concurrently TTS** subsequent streaming sentences while the current sentence is being spoken.
+- Add a **voice wake-up** feature. Elaina enters a sleep mode after a certain period (10s) of inactivity following each conversation chain. She can be reactivated using the wake word "Elaina".
+- Add **singing functionality** using [Retrieval-based-Voice-Conversion](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI).
+- Add **computer use** function using Claude API.
+- Support **packaging** the frontend as an exe or dmg.
+- Add **AWS backend integration** for cloud-based processing while maintaining local STT/TTS capabilities.
+
+### 👀Demo
+
+The demo videos don't reflect the latest version. 
+
+The leaked API keys in these videos also don't work.
+
+https://github.com/user-attachments/assets/030bff1b-63a2-4b43-848b-a0c5b9db6f42
+
+https://github.com/user-attachments/assets/77157c00-5be8-4f99-b549-b13ad113be52
+
+
+https://github.com/user-attachments/assets/491714cd-5d59-44f4-b100-b4a89ca1d9e2
+
+
+https://github.com/user-attachments/assets/58785339-34eb-4d5c-9413-f0e9f5810be0
+
+
+https://github.com/user-attachments/assets/badca04a-5ece-478c-a175-5e4bc3f563df
+
+https://github.com/user-attachments/assets/81c6cfb7-63cc-4983-a541-6dcaace1ad3c
+
+### ⚠️Statement
+
+To use this project, it is recommended to have at least basic Python programming skills. 
+
+Please refer carefully to the original project's [Wiki](https://github.com/t41372/Open-LLM-VTuber/wiki).
+
+For usage details and customization, you might need to consult the relevant project documentation (if you require corresponding components) and read or modify this project's code.
+
+Due to copyright issues, some models used in this project will not be public.
+
+### 🛠️Usage
+
+Require python >= 3.11.
+
+##### AWS Backend Integration (New!)
+- Set the AWS environment variables using the provided scripts:
+  - Windows: `call set_aws_env.bat`
+  - Linux/macOS: `source set_aws_env.sh`
+- The AWS backend provides WebSocket and HTTP endpoints for cloud-based processing
+- Local STT/TTS is still used by default, with cloud fallbacks available if enabled
+
+##### GPTSoVITS (if needed)
+- Download the [Elaina GPTSoVITS model](https://www.bilibili.com/video/BV1Df421m7bm/).
+- Download [GPT-SoVITS-v2-240821](https://github.com/RVC-Boss/GPT-SoVITS/releases/tag/20240821v2), and configure the `GPT_SoVITS/configs/tts_infer.yaml` according to the official document.
+- run `runtime\python.exe api_v2.py`. 
+
+##### DeepLX (if needed)
+- Launch [DeepLX](https://github.com/OwO-Network/DeepLX) server if you want Elaina to say Japanese (Because the model's responses usually use the same language as the system prompt/user's input), you can run `docker run -itd -p 1188:1188  ghcr.io/owo-network/deeplx:latest`.
+
+##### Environment Configuration
+- `git clone https://github.com/ylxmf2005/YourElaina` 
+- `pip install requirements.txt` 
+- Modify `conf.yaml` according to your needs.
+
+For more details, please read this [Wiki](https://github.com/t41372/Open-LLM-VTuber/wiki).
+
+##### Wake-up (if needed)
+- Obtain your [Picovoice](https://console.picovoice.ai/) access key.
+- Set the `accessKey` in `static/desktop/vad.js` to your own access key.
+
+##### Clipboard retrieval & Screen sensing (if needed)
+
+Better to use with a snipping tool like Snipaste. Read `def get_prompt_and_image` in `module/conversation_manager.py` for details. 
+
+For screen sensing, please set your vllm in `conf.yaml.`
+
+##### Computer-use (if needed)
+
+The feature is currently running on the backend computer and will be migrated to Electron in the future.
+
+Experimental, only for MacOS. Set your `CLAUDE_API_KEY` in `conf.yaml`.
+
+Will support Windows in the future.
+
+##### Desktop-mode (Dev, recommended)
+- `npm install`
+- `npm start` 
+
+##### Desktop-mode (Build, to get exe on Windows, dmg on macOS)
+
+- `npm install`
+- `npm run build`, the executable file (frontend) will be generated in `dist/`. 
+  - If you are using Windows, make sure the terminal running `npm run build` has administrative privileges.
+- `python server.py` to start backend service (Due to flexibility and environment management, packaging backend is not supported, but may be supported in the future)
+- Open the executable file
+
+Tip: To deploy the frontend and backend in different device, you need to modify `window.ws = new WebSocket("ws://127.0.0.1:1017/client-ws");` in `static/desktop/websocket.js` to your server's address and port (which can be set in `conf.yaml`).
+
+##### Web-mode
+- `python server.py --web`
+
+### 🌐 AWS Backend Integration
+
+The application now supports integration with an AWS backend for cloud-based processing. This hybrid approach maintains the privacy and low latency of local STT/TTS while enabling cloud-based features.
+
+#### First Run Checklist
+
+1. Set environment variables using the provided scripts:
+   - Windows: `call set_aws_env.bat`
+   - Linux/macOS: `source set_aws_env.sh`
+
+2. Verify the connection in the Settings panel:
+   - Click "Settings" in the status bar
+   - Check that the WebSocket URL and HTTP Base URL are populated
+   - Click "Test Cloud Connection" to verify connectivity
+   - Click "Test WebSocket" to verify WebSocket connectivity
+
+3. Configure feature flags:
+   - Use Local TTS: Enabled by default
+   - Use Local STT: Enabled by default
+   - Use Cloud Fallbacks: Enabled by default
+
+#### Architecture
+
+- **Local Processing**: Speech recognition and text-to-speech are handled locally by default
+- **Cloud Processing**: Messages are sent to the AWS backend via WebSocket
+- **Hybrid Approach**: Local engines are used for privacy and low latency, with cloud fallbacks available if needed
+
+### 📋To Do List
+- Sync with the upstream repository (Continuous work).
+- Move computer functions to electron.
+- Add timbre recognition function.
+- Use smarter algorithms to detect if the user has stopped speaking.
+- Enhance the UI by adding input field, chat history.
+- Add more expressions and poses like random idle poses. 
+- Allow the LLM to access the Internet.
+- Implement Cognito authentication for the AWS backend.
+- Add cloud STT/TTS fallbacks.
+
+
+### 👏Acknowledgement
+
+- Thank [t41372](https://github.com/t41372)  for the  [Open-LLM-VTuber](https://github.com/t41372/Open-LLM-VTuber).
+
+- Thank [MNDIA](https://www.aplaybox.com/details/model/0MAXIOhAZAUw) for the Live2D model
+
+- Thank [灰发的伊蕾娜](https://www.bilibili.com/video/BV1Df421m7bm/) for the GPTSoVITS model.

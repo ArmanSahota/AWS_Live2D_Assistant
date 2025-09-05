@@ -1,0 +1,62 @@
+sing/converted_vocal/*
+sing/instrument/*
+sing/merged/*
+sing/original/*
+sing/vocal/*
+conf.yaml
+node_modules/
+package-lock.json
+dist/
+static/live2d-models/
+config_alts/
+.sync/
+
+# macOS system files
+.DS_Store
+
+# Python files
+__pycache__/
+*.pyc
+lab.py
+.idea
+
+# Virtual environment
+.conda
+conda
+
+# Sensitive data
+.env
+api_keys.py
+llm/user_credentials.json
+
+# Database files
+memory.db
+memory.db.bk
+
+# Logs
+server.log
+
+# Cache and models
+cache/*
+tts/asset
+tts/config
+asr/models*
+!asr/models/silero_vad.onnx
+asset
+models/*
+!models/piper_voice
+models/piper_voice/*
+
+
+# Legacy and specific directories
+legacy/
+chat_history/
+knowledge_base/
+submodules/MeloTTS
+openapi_assistants.json
+openapi_memgpt.json
+
+
+# memory log
+mem.json
+conf.yaml.backup
