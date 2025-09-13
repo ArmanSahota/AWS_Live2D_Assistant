@@ -13,22 +13,164 @@
     <script src="libs/porcupine-web.js"></script>
     <script src="libs/web-voice-processor.js"></script>
     <script src="desktop/porcupine_params.js"></script>
-    <script src="desktop/Elaina_en_wasm_v3_0_0.js"></script>
+    <!-- Optional wake word script - will be loaded dynamically if available -->
+    <script>
+        // Enhanced wake word script loader that checks file existence and provides fallbacks
+        (function() {
+            // Define the English wake word file path
+            const englishWakeWordPath = "desktop/Elaina_en_wasm_v3_0_0.js";
+            
+            // Check if the file exists before trying to load it
+            fetch(englishWakeWordPath)
+                .then(response => {
+                    if (response.ok) {
+                        // File exists, load it
+                        const script = document.createElement('script');
+                        script.src = englishWakeWordPath;
+                        document.head.appendChild(script);
+                        console.log("English wake word script loaded successfully");
+                    } else {
+                        throw new Error("English wake word script not found");
+                    }
+                })
+                .catch(error => {
+                    console.warn("English wake word file not found, using Chinese wake word only:", error);
+                    
+                    // Set a flag to indicate English wake word is not available
+                    window.englishWakeWordAvailable = false;
+                });
+            
+            // Always set the flag to true initially, will be set to false if fetch fails
+            window.englishWakeWordAvailable = true;
+        })();
+    </script>
 
     <!-- 引入样式 -->
     <link rel="stylesheet" href="desktop/style.css">
+    <!-- Draggable VTuber Feature -->
+    <script src="desktop/draggable.js"></script>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
-    <div id="message" class="hidden"></div>
-    <div id="mic-info" class="hidden"></div>
-    <input type="hidden" id="speechProbThreshold" value="90">
+    <div id="ui-root">
+        <div id="message">Ready</div>
+        <div id="mic-info" class="hidden"></div>
+        <input type="hidden" id="speechProbThreshold" value="90">
+        
+        <!-- Test Panel -->
+        <div id="test-panel" style="position: absolute; top: 10px; left: 10px; background-color: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 5px; z-index: 1000;">
+        <h3>Test Panel</h3>
+        <div style="margin: 5px;">
+            <label for="switch-config">Switch Model:</label>
+            <select id="switch-config" style="width: 100%; margin-top: 5px; padding: 3px;">
+                <option value="">Loading models...</option>
+            </select>
+        </div>
+        <button id="test-claude" style="margin: 5px; padding: 5px;">Test Claude API</button>
+        <button id="test-tts" style="margin: 5px; padding: 5px;">Test TTS</button>
+        <button id="test-stt" style="margin: 5px; padding: 5px;">Test STT</button>
+        <button id="test-pipeline" style="margin: 5px; padding: 5px;">Test Full Pipeline</button>
+        <div id="test-result" style="margin-top: 10px; max-width: 300px; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+    </div>
+    
+    <div id="live2d-stage">
+        <canvas id="live2d-canvas"></canvas>
+    </div>
 
     <!-- 引入脚本 -->
     <script src="desktop/live2d.js"></script>
     <script src="desktop/websocket.js"></script>
+    <script src="desktop/reconnect.js"></script>
     <script src="desktop/vad.js"></script>
     <script src="desktop/audio.js"></script>
     <script src="desktop/electron.js"></script>
+    <script src="desktop/diagnostics.js"></script>
+    
+    <!-- Test Panel Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Test result display
+            const resultDiv = document.getElementById('test-result');
+            
+            // Log function
+            function log(message, isError = false) {
+                const p = document.createElement('p');
+                p.textContent = message;
+                p.style.margin = '2px 0';
+                p.style.color = isError ? '#ff6b6b' : '#a3ff8c';
+                resultDiv.appendChild(p);
+                resultDiv.scrollTop = resultDiv.scrollHeight;
+                console.log(message);
+            }
+            
+            // Test Claude API
+            document.getElementById('test-claude').addEventListener('click', async function() {
+                try {
+                    log("Testing Claude API...");
+                    const response = await window.api.askClaude("Say hello in a friendly way.");
+                    log(`Claude response: ${response.substring(0, 50)}${response.length > 50 ? '...' : ''}`);
+                } catch (error) {
+                    log(`Error: ${error.message}`, true);
+                }
+            });
+            
+            // Test TTS
+            document.getElementById('test-tts').addEventListener('click', async function() {
+                try {
+                    log("Testing TTS...");
+                    const text = "This is a test of the text to speech system.";
+                    const speechData = await window.api.generateSpeech(text);
+                    log(`TTS generated ${speechData.base64.length} bytes of audio`);
+                    
+                    // Play the audio
+                    await window.addAudioTask(speechData.base64, null, null, null, text, null);
+                    log("Audio playback started");
+                } catch (error) {
+                    log(`Error: ${error.message}`, true);
+                }
+            });
+            
+            // Test STT
+            document.getElementById('test-stt').addEventListener('click', function() {
+                try {
+                    log("Testing STT... Please speak into your microphone.");
+                    window.start_mic();
+                    
+                    // Create a function to log STT results if it doesn't exist
+                    if (!window.originalLogSTTResult) {
+                        window.originalLogSTTResult = window.logSTTResult || function() {};
+                        
+                        window.logSTTResult = function(text) {
+                            log(`STT result: "${text}"`);
+                            window.originalLogSTTResult(text);
+                        };
+                    }
+                } catch (error) {
+                    log(`Error: ${error.message}`, true);
+                }
+            });
+            
+            // Test Full Pipeline
+            document.getElementById('test-pipeline').addEventListener('click', async function() {
+                try {
+                    log("Testing full pipeline...");
+                    const text = "Tell me a short joke.";
+                    log(`Simulating speech: "${text}"`);
+                    
+                    // Simulate STT result
+                    if (window.logSTTResult) {
+                        window.logSTTResult(text);
+                        log("Speech transcribed and sent to Claude");
+                    } else {
+                        log("STT logging function not found", true);
+                    }
+                } catch (error) {
+                    log(`Error: ${error.message}`, true);
+                }
+            });
+            
+            log("Test panel initialized");
+        });
+    </script>
 </body>
 </html>

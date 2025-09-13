@@ -20,7 +20,9 @@ export interface FeatureFlags {
 export interface AWSConfig {
   region: string;
   wsUrl: string;
+  httpBase: string;
   httpBaseUrl: string;
+  authToken?: string;
   cognitoUserPoolId: string;
   cognitoClientId: string;
   cognitoDomain: string;
@@ -46,6 +48,7 @@ const store = new Store({
     aws: {
       region: process.env.VITE_AWS_REGION || 'us-west-2',
       wsUrl: process.env.VITE_WS_URL || '',
+      httpBase: process.env.VITE_HTTP_BASE || '',
       httpBaseUrl: process.env.VITE_HTTP_BASE || '',
       cognitoUserPoolId: process.env.VITE_COGNITO_USER_POOL_ID || '',
       cognitoClientId: process.env.VITE_COGNITO_CLIENT_ID || '',
@@ -70,6 +73,7 @@ export function readConfig(): AppConfig {
     aws: {
       region: process.env.VITE_AWS_REGION || 'us-west-2',
       wsUrl: process.env.VITE_WS_URL || '',
+      httpBase: process.env.VITE_HTTP_BASE || '',
       httpBaseUrl: process.env.VITE_HTTP_BASE || '',
       cognitoUserPoolId: process.env.VITE_COGNITO_USER_POOL_ID || '',
       cognitoClientId: process.env.VITE_COGNITO_CLIENT_ID || '',

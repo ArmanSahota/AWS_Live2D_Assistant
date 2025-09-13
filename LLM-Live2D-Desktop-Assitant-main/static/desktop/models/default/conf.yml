@@ -1,0 +1,11 @@
+# Model Configuration
+name: default
+model3: LSS.model3.json
+
+# Display settings
+scale: 0.005
+offsetX: 0
+offsetY: 0
+
+# Optional animation settings
+idleMotions: []

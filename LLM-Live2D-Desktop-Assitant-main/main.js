@@ -11,7 +11,7 @@ const Store = require('electron-store');
 const { readConfig, updateConfig, getFeatureFlags, updateFeatureFlags, getAWSConfig, updateAWSConfig } = require('./src/config/appConfig');
 
 // Import IPC module
-const { initializeIPC } = require('./src/main/ipc.js');
+const { initializeIPC, getTranscriptionHistory } = require('./src/main/ipc.js');
 
 // Authentication state
 let authToken = null;
@@ -30,6 +30,7 @@ let tray = null;
 let contextMenu;
 let currentConfigFile = '';
 let configFiles = [];
+let backendProcess = null; // FIX: Added missing declaration
 const isMac = process.platform === 'darwin';
 
 
@@ -82,8 +83,8 @@ function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
   mainWindow = new BrowserWindow({
-    width: width,
-    height: height,
+    width: 1280,
+    height: 800,
     x: 0,
     y: 0,
     transparent: true,
@@ -95,6 +96,8 @@ function createWindow() {
     focusable: true,
     acceptFirstMouse: true,
     backgroundColor: '#00000000',
+    fullscreen: false,
+    kiosk: false,
     webPreferences: {
       preload: path.join(basePath, 'static', 'desktop', 'preload.js'),
       contextIsolation: true,
@@ -174,17 +177,24 @@ function setSensitivity(value) {
   mainWindow.webContents.send('set-sensitivity', value);
 }
 
-app.on('ready', () => {
-  // Initialize IPC handlers
+// Use whenReady() to ensure initializeIPC() is only called once
+app.whenReady().then(() => {
+  console.log('Electron app is ready');
+  
+  // Initialize IPC handlers - this should only happen once
+  console.log('Initializing IPC handlers...');
   initializeIPC();
   
   if (isDevelopment) {
+    console.log('Starting backend in development mode...');
     startBackend();
+    console.log('Waiting for backend to start before creating window...');
     setTimeout(() => {
       createWindow();
     }, 3000);
   }
   else {
+    console.log('Creating window in production mode...');
     createWindow();
   }
 });
@@ -208,9 +218,10 @@ app.on('will-quit', () => {
 
 
 function startBackend() {
-  pythonExecutable = "python"
+  const pythonExecutable = "python"
 
   const scriptPath = path.join(basePath, 'server.py');
+  console.log(`Starting backend with script: ${scriptPath}`);
 
   backendProcess = spawn(pythonExecutable, [scriptPath], {
     cwd: basePath,
@@ -218,23 +229,35 @@ function startBackend() {
   });
 
   backendProcess.stdout.on('data', (data) => {
-    process.stdout.write(`${data}`);
+    const output = data.toString();
+    console.log(`[Backend] ${output.trim()}`);
   });
 
   backendProcess.stderr.on('data', (data) => {
-    process.stdout.write(`${data}`);
+    const output = data.toString();
+    console.error(`[Backend Error] ${output.trim()}`);
   });
 
   backendProcess.on('close', (code) => {
-    process.stdout.write(`${code}`);
+    console.log(`Backend process exited with code ${code}`);
+    if (code !== 0 && !app.isQuitting) {
+      console.log('Attempting to restart backend...');
+      setTimeout(() => {
+        startBackend();
+      }, 5000);
+    }
   });
+  
+  console.log('Backend process started');
 }
 
 
 function stopBackend() {
   if (backendProcess) {
+    console.log('Stopping backend process...');
     backendProcess.kill();
     backendProcess = null;
+    console.log('Backend process stopped');
   }
 }
 
@@ -313,38 +336,79 @@ ipcMain.handle('get-clipboard-content', async () => {
     return content;
 });
 
-// Configuration IPC handlers
-ipcMain.handle('get-config', async () => {
-  return readConfig();
+// Get transcription history
+ipcMain.handle('get-transcription-history', async () => {
+    return getTranscriptionHistory();
 });
 
-ipcMain.handle('update-config', async (event, config) => {
-  updateConfig(config);
-  return readConfig();
+// Log transcription
+ipcMain.on('log:transcription', (_event, text) => {
+    console.log(`[STT Transcription] "${text}"`);
 });
 
-ipcMain.handle('get-feature-flags', async () => {
-  return getFeatureFlags();
+// Add test functions
+ipcMain.handle('test:claude', async () => {
+    console.log('Running Claude API test...');
+    try {
+        const { askClaude } = require('./src/main/claudeClient');
+        const response = await askClaude('Say hello in a friendly way.');
+        console.log(`Claude test response: ${response}`);
+        return { success: true, response };
+    } catch (error) {
+        console.error('Claude test failed:', error);
+        return { success: false, error: error.message };
+    }
 });
 
-ipcMain.handle('update-feature-flags', async (event, flags) => {
-  updateFeatureFlags(flags);
-  return getFeatureFlags();
+ipcMain.handle('test:tts', async () => {
+    console.log('Running TTS test...');
+    try {
+        const { generateSpeech } = require('./src/main/ipc');
+        const text = 'This is a test of the text to speech system.';
+        const audioData = await generateSpeech(text);
+        console.log(`TTS test generated ${audioData.byteLength} bytes of audio`);
+        return { success: true, size: audioData.byteLength };
+    } catch (error) {
+        console.error('TTS test failed:', error);
+        return { success: false, error: error.message };
+    }
 });
 
-ipcMain.handle('get-aws-config', async () => {
-  return getAWSConfig();
+ipcMain.handle('test:pipeline', async () => {
+    console.log('Running full pipeline test...');
+    try {
+        const { askClaude } = require('./src/main/claudeClient');
+        const { generateSpeech } = require('./src/main/ipc');
+        
+        // Step 1: Call Claude
+        console.log('Step 1: Calling Claude API...');
+        const text = 'Tell me a short joke.';
+        const response = await askClaude(text);
+        console.log(`Claude response: ${response}`);
+        
+        // Step 2: Generate speech
+        console.log('Step 2: Generating speech...');
+        const audioData = await generateSpeech(response);
+        console.log(`Generated ${audioData.byteLength} bytes of audio`);
+        
+        return { 
+            success: true, 
+            claudeResponse: response,
+            audioSize: audioData.byteLength
+        };
+    } catch (error) {
+        console.error('Pipeline test failed:', error);
+        return { success: false, error: error.message };
+    }
 });
 
-ipcMain.handle('update-aws-config', async (event, config) => {
-  updateAWSConfig(config);
-  return getAWSConfig();
-});
+// Configuration IPC handlers are now handled in src/main/ipc.js
 
 // Microphone selection
 async function showMicrophoneSelectionDialog() {
-  const devices = await desktopCapturer.getSources({ types: ['audio'] });
-  const microphoneDevices = devices.filter(device => device.name !== 'System Audio');
+  // Use the devices sent from the renderer
+  const store = new Store();
+  const microphoneDevices = store.get('microphoneDevices') || [];
   
   const microphoneMenu = Menu.buildFromTemplate(
     microphoneDevices.map(device => ({
@@ -358,41 +422,35 @@ async function showMicrophoneSelectionDialog() {
   microphoneMenu.popup({ window: mainWindow });
 }
 
-// Handle microphone device requests
-ipcMain.handle('get-microphone-devices', async () => {
-  const devices = await desktopCapturer.getSources({ types: ['audio'] });
-  return devices.filter(device => device.name !== 'System Audio');
-});
+// Handle microphone device requests is now handled in src/main/ipc.js
 
-ipcMain.on('set-microphone-device', (event, deviceId) => {
-  // Store the selected device ID for future use
+// Handle microphone devices from renderer
+ipcMain.on('set-microphone-devices', (_event, devices) => {
+  // Store the devices for later retrieval
   const store = new Store();
-  store.set('selectedMicrophoneId', deviceId);
-});
-
-// Authentication IPC handlers
-ipcMain.handle('is-logged-in', async () => {
-  return authToken !== null;
-});
-
-ipcMain.handle('login', async () => {
-  try {
-    const config = getAWSConfig();
-    const authUrl = `${config.cognitoDomain}/login?client_id=${config.cognitoClientId}&response_type=token&scope=email+openid+profile&redirect_uri=myapp://auth`;
-    
-    // Open the auth URL in the default browser
-    await shell.openExternal(authUrl);
-    return true;
-  } catch (error) {
-    console.error('Error during login:', error);
-    return false;
+  store.set('microphoneDevices', devices);
+  
+  // Update the microphone selection dialog
+  if (mainWindow) {
+    mainWindow.webContents.send('microphone-devices-updated', devices);
   }
 });
 
-ipcMain.handle('logout', async () => {
-  authToken = null;
-  return true;
-});
+// set-microphone-device is now handled in src/main/ipc.js
+
+// Authentication state management
+function setAuthToken(token) {
+  authToken = token;
+  
+  // Notify renderer process
+  if (mainWindow) {
+    mainWindow.webContents.send('auth-callback', { success: true, token: authToken });
+  }
+}
+
+// Export auth token for IPC module
+global.authToken = authToken;
+global.setAuthToken = setAuthToken;
 
 // Register custom URL protocol handler for auth callback
 if (isDevelopment) {

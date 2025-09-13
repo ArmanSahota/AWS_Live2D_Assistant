@@ -1,29 +1,23 @@
-/**
- * Type declarations for electron-store
- */
+// Type definitions for electron-store
+// This is a simplified declaration file to resolve TypeScript errors
 
 declare module 'electron-store' {
   interface StoreOptions<T> {
     name?: string;
-    cwd?: string;
     defaults?: T;
-    schema?: any;
-    watch?: boolean;
-    clearInvalidConfig?: boolean;
-    migrations?: any;
-    serialize?: (data: T) => string;
-    deserialize?: (text: string) => T;
-    fileExtension?: string;
-    accessPropertiesByDotNotation?: boolean;
+    cwd?: string;
     encryptionKey?: string | Buffer;
+    fileExtension?: string;
+    clearInvalidConfig?: boolean;
+    serialize?: (value: T) => string;
+    deserialize?: (value: string) => T;
   }
 
   class Store<T = any> {
     constructor(options?: StoreOptions<T>);
     get<K extends keyof T>(key: K): T[K];
-    get<K extends keyof T, D>(key: K, defaultValue: D): T[K] | D;
     get(key: string): any;
-    get(key: string, defaultValue: any): any;
+    get(): T;
     set<K extends keyof T>(key: K, value: T[K]): void;
     set(key: string, value: any): void;
     set(object: Partial<T>): void;

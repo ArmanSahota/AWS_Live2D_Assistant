@@ -1,138 +1,207 @@
 /**
  * HTTP Chat Path Module
  * 
- * This module provides the HTTP-based chat pipeline for communicating with Claude.
- * It handles sending user messages, receiving assistant responses, and updating the UI.
+ * This module provides functionality for sending messages to Claude via HTTP
+ * and handling responses, including TTS playback of replies.
  */
 
-import { getFeatureFlags } from '../../config/appConfig';
 import { speak } from '../speech/ttsBridge';
+import { listenOnce } from '../speech/sttBridge';
+import { getFeatureFlags } from '../../config/appConfig';
 
-// Define the message type
-export interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
+// Message type for chat messages
+interface ChatMessage {
+  type: 'user' | 'assistant';
+  text: string;
   timestamp: number;
+  id: string;
 }
 
-// Chat state
-let transcript: ChatMessage[] = [];
-let inFlightRequest: AbortController | null = null;
+// Chat history
+const chatHistory: ChatMessage[] = [];
 
-// Event callbacks
-type MessageCallback = (message: ChatMessage, isNew: boolean) => void;
-type ErrorCallback = (error: Error) => void;
+// Status callbacks
+type StatusCallback = (status: string, details?: any) => void;
+const statusCallbacks: StatusCallback[] = [];
 
-const messageCallbacks: MessageCallback[] = [];
-const errorCallbacks: ErrorCallback[] = [];
+// Current status
+let currentStatus = 'idle';
 
 /**
- * Send a user message to Claude via HTTP
- * @param text The text to send
- * @returns A promise that resolves when the message is processed
+ * Generate a unique ID for chat messages
+ * @returns A unique ID
+ */
+function generateId(): string {
+  return Math.random().toString(36).substring(2, 15);
+}
+
+/**
+ * Update the chat status and notify listeners
+ * @param status The new status
+ * @param details Optional details about the status
+ */
+function updateStatus(status: string, details?: any): void {
+  if (currentStatus !== status) {
+    console.log(`[HTTP Chat] Status changed from ${currentStatus} to ${status}`, details || '');
+    currentStatus = status;
+    statusCallbacks.forEach(callback => callback(status, details));
+  }
+}
+
+/**
+ * Register a status callback
+ * @param callback The callback function
+ */
+export function onStatus(callback: StatusCallback): void {
+  statusCallbacks.push(callback);
+  // Call immediately with current status
+  callback(currentStatus);
+}
+
+/**
+ * Add a message to the chat history
+ * @param type The type of message (user or assistant)
+ * @param text The message text
+ */
+function addMessage(type: 'user' | 'assistant', text: string): ChatMessage {
+  const message: ChatMessage = {
+    type,
+    text,
+    timestamp: Date.now(),
+    id: generateId()
+  };
+  
+  chatHistory.push(message);
+  return message;
+}
+
+/**
+ * Get the chat history
+ * @returns The chat history
+ */
+export function getChatHistory(): ChatMessage[] {
+  return [...chatHistory];
+}
+
+/**
+ * Clear the chat history
+ */
+export function clearChatHistory(): void {
+  chatHistory.length = 0;
+}
+
+/**
+ * Send user text message via HTTP and process the response
+ * @param text The user's text message
+ * @returns A promise that resolves when the message has been processed
  */
 export async function sendUserTextHTTP(text: string): Promise<void> {
-  // Validate input
-  if (!text || !text.trim()) {
-    throw new Error('Message cannot be empty');
+  if (!text || text.trim().length === 0) {
+    console.warn('Attempted to send empty message');
+    return;
   }
-
-  // Cancel any in-flight request
-  if (inFlightRequest) {
-    inFlightRequest.abort();
-    inFlightRequest = null;
-  }
-
-  // Create a new abort controller for this request
-  inFlightRequest = new AbortController();
-
+  
+  // Add user message to chat history
+  const userMessage = addMessage('user', text);
+  
+  // Add message to UI
+  addMessageToUI(userMessage);
+  
+  // Update status
+  updateStatus('sending');
+  
   try {
-    // Add user message to transcript
-    const userMessage: ChatMessage = {
-      role: 'user',
-      content: text,
-      timestamp: Date.now(),
-    };
-    
-    transcript.push(userMessage);
-    notifyMessageCallbacks(userMessage, true);
-
-    // Send the message to Claude
+    // Send message to Claude via IPC
     const reply = await window.api.askClaude(text);
-
-    // Add assistant message to transcript
-    const assistantMessage: ChatMessage = {
-      role: 'assistant',
-      content: reply,
-      timestamp: Date.now(),
-    };
     
-    transcript.push(assistantMessage);
-    notifyMessageCallbacks(assistantMessage, true);
-
-    // Speak the reply if local TTS is enabled
+    // Update status
+    updateStatus('processing');
+    
+    // Add assistant message to chat history
+    const assistantMessage = addMessage('assistant', reply);
+    
+    // Add message to UI
+    addMessageToUI(assistantMessage);
+    
+    // Check if TTS is enabled
     const flags = getFeatureFlags();
     if (flags.useLocalTTS) {
-      await speak(reply);
+      try {
+        // Update status
+        updateStatus('speaking');
+        
+        // Speak the reply
+        const result = await speak(reply);
+        
+        if (!result.success) {
+          console.error('TTS failed:', result.error);
+        }
+      } catch (error) {
+        console.error('Error during TTS:', error);
+      }
     }
-  } catch (error) {
-    console.error('Error in HTTP chat path:', error);
     
-    // Notify error callbacks
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    notifyErrorCallbacks(new Error(`Cloud request failed: ${errorMessage}`));
-  } finally {
-    inFlightRequest = null;
+    // Update status
+    updateStatus('idle');
+  } catch (error) {
+    console.error('Error sending message:', error);
+    
+    // Show error message in UI
+    const errorMessage = 'Failed to get a response from Claude. Please try again.';
+    const assistantMessage = addMessage('assistant', errorMessage);
+    addMessageToUI(assistantMessage);
+    
+    // Update status
+    updateStatus('error', { error });
   }
 }
 
 /**
- * Register a callback for new messages
- * @param callback The callback function
+ * Listen for user speech, transcribe it, and send to Claude
+ * @returns A promise that resolves when the speech has been processed
  */
-export function onMessage(callback: MessageCallback): void {
-  messageCallbacks.push(callback);
+export async function listenAndSendHTTP(): Promise<void> {
+  try {
+    // Update status
+    updateStatus('listening');
+    
+    // Listen for speech
+    const result = await listenOnce();
+    
+    if (!result.success || !result.text) {
+      console.error('STT failed:', result.error);
+      updateStatus('error', { error: result.error });
+      return;
+    }
+    
+    // Send the transcribed text to Claude
+    await sendUserTextHTTP(result.text);
+  } catch (error) {
+    console.error('Error in speech recognition:', error);
+    updateStatus('error', { error });
+  }
+}
+
+/**
+ * Add a message to the UI
+ * @param message The message to add
+ */
+function addMessageToUI(message: ChatMessage): void {
+  // In a real implementation, this would update the UI
+  // For now, we'll just log the message
+  console.log(`[${message.type}] ${message.text}`);
   
-  // Send existing transcript to the new callback
-  transcript.forEach(message => callback(message, false));
-}
-
-/**
- * Register a callback for errors
- * @param callback The callback function
- */
-export function onError(callback: ErrorCallback): void {
-  errorCallbacks.push(callback);
-}
-
-/**
- * Notify all message callbacks about a new message
- * @param message The message
- * @param isNew Whether the message is new
- */
-function notifyMessageCallbacks(message: ChatMessage, isNew: boolean): void {
-  messageCallbacks.forEach(callback => callback(message, isNew));
-}
-
-/**
- * Notify all error callbacks about an error
- * @param error The error
- */
-function notifyErrorCallbacks(error: Error): void {
-  errorCallbacks.forEach(callback => callback(error));
-}
-
-/**
- * Get the current transcript
- * @returns The transcript
- */
-export function getTranscript(): ChatMessage[] {
-  return [...transcript];
-}
-
-/**
- * Clear the transcript
- */
-export function clearTranscript(): void {
-  transcript = [];
+  // Add the message to the chat container
+  const chatContainer = document.getElementById('chat-container');
+  if (chatContainer) {
+    const messageElement = document.createElement('div');
+    messageElement.className = `message ${message.type}`;
+    messageElement.textContent = message.text;
+    chatContainer.appendChild(messageElement);
+    
+    // Scroll to bottom
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+  } else {
+    console.warn('Chat container not found');
+  }
 }

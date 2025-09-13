@@ -168,9 +168,21 @@ async function start_wake_word_detection() {
         return;
     }
 
-    if (window.WebVoiceProcessor.WebVoiceProcessor.isRecording) {
-        await window.WebVoiceProcessor.WebVoiceProcessor.unsubscribe(porcupine);
-        await porcupine.terminate();
+    // Check if required libraries are available
+    if (!window.WebVoiceProcessor || !window.PorcupineWeb) {
+        console.error("Wake word detection libraries not available. Skipping wake word detection.");
+        return;
+    }
+
+    if (window.WebVoiceProcessor.WebVoiceProcessor && 
+        window.WebVoiceProcessor.WebVoiceProcessor.isRecording && 
+        porcupine) {
+        try {
+            await window.WebVoiceProcessor.WebVoiceProcessor.unsubscribe(porcupine);
+            await porcupine.terminate();
+        } catch (err) {
+            console.error("Error cleaning up previous wake word detection:", err);
+        }
     }
 
     console.log("Starting wake word detection...");
@@ -178,24 +190,96 @@ async function start_wake_word_detection() {
     
     accessKey = "/7gDUCElrddYzUegKQSEoe/ZQjH+sKU1KjcEnANpHdYQeLhc1WXrHQ=="
     try {
+        // First check if the files actually exist before trying to load them
+        const keywords = [];
+        const chineseWakeWordFile = "desktop/伊蕾娜_zh_wasm_v3_0_0.ppn";
+        const englishWakeWordFile = "desktop/Elaina_en_wasm_v3_0_0.ppn";
+        const chineseParamsFile = "desktop/porcupine_params_zh.pv";
+        const englishParamsFile = "desktop/porcupine_params.pv";
+        
+        // Check Chinese wake word availability
+        let chineseAvailable = false;
+        try {
+            // Try to fetch the file to see if it exists
+            const chineseFileCheck = await fetch(chineseWakeWordFile, { method: 'HEAD' })
+                .catch(() => ({ ok: false }));
+                
+            if (chineseFileCheck.ok) {
+                console.log("Chinese wake word file found");
+                chineseAvailable = true;
+                keywords.push({
+                    label: "伊蕾娜",
+                    publicPath: chineseWakeWordFile
+                });
+            }
+        } catch (e) {
+            console.log("Error checking Chinese wake word file:", e);
+        }
+
+        // Check English wake word availability if window.englishWakeWordAvailable is true
+        // (This flag was set in desktop.html based on file availability)
+        let englishAvailable = false;
+        try {
+            if (window.englishWakeWordAvailable !== false) {
+                const englishFileCheck = await fetch(englishWakeWordFile, { method: 'HEAD' })
+                    .catch(() => ({ ok: false }));
+                    
+                if (englishFileCheck.ok) {
+                    console.log("English wake word file found");
+                    englishAvailable = true;
+                    keywords.push({
+                        label: "Elaina",
+                        publicPath: englishWakeWordFile
+                    });
+                }
+            }
+        } catch (e) {
+            console.log("Error checking English wake word file:", e);
+        }
+        
+        // If no wake words are available, we can't continue
+        if (keywords.length === 0) {
+            console.error("No wake word files available");
+            isWaitingForWakeWord = false;
+            document.getElementById("message").textContent = "Wake word detection unavailable";
+            return;
+        }
+        
+        // Choose the appropriate params file based on which keywords are available
+        let paramsPath;
+        if (chineseAvailable && englishAvailable) {
+            // Both are available, prioritize English
+            paramsPath = englishParamsFile;
+        } else if (chineseAvailable) {
+            paramsPath = chineseParamsFile;
+        } else if (englishAvailable) {
+            paramsPath = englishParamsFile;
+        }
+        
+        console.log(`Creating Porcupine with ${keywords.length} keywords and params: ${paramsPath}`);
+        
+        // Create the Porcupine worker with all available keywords
         porcupine = await PorcupineWeb.PorcupineWorker.create(
             accessKey,
-            {
-                label:"伊蕾娜",
-                publicPath: "desktop/伊蕾娜_zh_wasm_v3_0_0.ppn"
-            },
+            keywords,
             keywordDetectionCallback,
             {
-                publicPath: "desktop/porcupine_params_zh.pv",
+                publicPath: paramsPath,
                 forceWrite: true,
             }
         );
-        await window.WebVoiceProcessor.WebVoiceProcessor.subscribe(porcupine);
+        
+        // Subscribe to the voice processor
+        if (porcupine && window.WebVoiceProcessor.WebVoiceProcessor) {
+            await window.WebVoiceProcessor.WebVoiceProcessor.subscribe(porcupine);
+            console.log("Wake word detection started successfully with keywords:", keywords.map(k => k.label).join(", "));
+        } else {
+            throw new Error("Porcupine or WebVoiceProcessor not available");
+        }
     } catch (err) {
-        console.log("Error starting wake word detection: " + err);
+        console.error("Error starting wake word detection:", err);
+        isWaitingForWakeWord = false;
     }
-
-    console.log("Wake word detection started.");
 }
 
 async function stop_wake_word_detection() {
@@ -212,7 +296,9 @@ async function stop_wake_word_detection() {
 
 function keywordDetectionCallback(detection) {
     console.log(`Porcupine detected keyword: ${detection.label}`);
-    if (detection.label === "伊蕾娜") {
+    // Handle both Chinese and English wake words
+    if (detection.label === "伊蕾娜" || detection.label === "Elaina") {
+        console.log("Wake word detected, activating microphone");
         window.start_mic();
     }
 }

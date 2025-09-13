@@ -226,11 +226,22 @@ class VoiceRecognitionVAD:
         logger.info("Stopping listening...")
         self.input_stream.stop()
 
+        # Log audio characteristics for debugging
+        audio_length = len(self.samples)
+        logger.info(f"Audio samples collected: {audio_length}")
+        if audio_length > 0:
+            audio_min = min([np.min(s) for s in self.samples])
+            audio_max = max([np.max(s) for s in self.samples])
+            logger.info(f"Audio amplitude range: {audio_min:.4f} to {audio_max:.4f}")
+        
         detected_text = self.asr(self.samples)
 
         if detected_text:
             logger.info(f"Detected: '{detected_text}'")
             return detected_text
+        else:
+            logger.warning("No text detected from audio")
+            return ""
 
         # these two lines will never be reached because I made the function return the detected text
         # so the reset function will be called in the _listen_and_respond function instead

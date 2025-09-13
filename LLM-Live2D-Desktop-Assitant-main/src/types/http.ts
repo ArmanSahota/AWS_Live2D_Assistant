@@ -11,6 +11,8 @@ export type ClaudeRequest = {
   text: string 
 };
 
+export type ClaudeRequestBody = ClaudeRequest;
+
 /**
  * Claude API response type
  */
@@ -24,3 +26,16 @@ export type ClaudeResponse = {
 export type HealthResponse = { 
   status: string 
 };
+
+/**
+ * AWS Config type
+ */
+export interface AWSConfig {
+  httpBase: string;
+  authToken?: string;
+  region?: string;
+  apiKey?: string;
+  bedrock?: {
+    modelId?: string;
+  };
+}

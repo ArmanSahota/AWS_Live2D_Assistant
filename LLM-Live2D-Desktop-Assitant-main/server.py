@@ -4,6 +4,7 @@ import shutil
 import atexit
 import json
 import asyncio
+import socket
 from typing import List, Dict, Any
 import yaml
 import numpy as np
@@ -17,6 +18,39 @@ from module.openllm_vtuber_main import OpenLLMVTuberMain
 from module.live2d_model import Live2dModel
 from tts.stream_audio import AudioPayloadPreparer
 import argparse
+
+
+def find_available_port(start_port: int = 1025, max_attempts: int = 25) -> int:
+    """
+    Find an available port starting from start_port.
+    
+    Args:
+        start_port: Port to start checking from (default: 1025)
+        max_attempts: Maximum number of ports to check (default: 25)
+        
+    Returns:
+        An available port number
+        
+    Raises:
+        RuntimeError: If no available ports are found after max_attempts
+    """
+    used_ports = set()
+    
+    for port_offset in range(max_attempts):
+        port = start_port + port_offset
+        try:
+            # Try to create a socket with the port
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('0.0.0.0', port))
+                logger.info(f"Found available port: {port}")
+                return port
+        except socket.error:
+            used_ports.add(port)
+            logger.warning(f"Port {port} is in use, trying next port")
+    
+    # If we've tried all ports and none are available, raise an exception
+    logger.error(f"All ports in range {start_port}-{start_port + max_attempts - 1} are in use: {sorted(used_ports)}")
+    raise RuntimeError(f"Could not find an available port after {max_attempts} attempts in range {start_port}-{start_port + max_attempts - 1}")
 
 
 class WebSocketServer:
@@ -232,6 +266,8 @@ class WebSocketServer:
                         if data.get("clipboardData"):
                             clipboard_data = data.get("clipboardData")
                         print("*", end="")
+                        # Log audio data being received
+                        logger.debug(f"Received audio data chunk, buffer size: {len(received_data_buffer)}")
 
                     elif (
                         data.get("type") == "mic-audio-end"
@@ -243,8 +279,15 @@ class WebSocketServer:
                         )
                         if data.get("type") == "text-input":
                             user_input = data.get("text")
+                            logger.info(f"Received text input: {user_input}")
                         else:
                             user_input: np.ndarray | str = received_data_buffer
+                            logger.info(f"Processing audio input, buffer size: {len(received_data_buffer)}")
+                            # Log audio characteristics for debugging
+                            if len(received_data_buffer) > 0:
+                                audio_min = np.min(received_data_buffer)
+                                audio_max = np.max(received_data_buffer)
+                                logger.info(f"Audio amplitude range: {audio_min:.4f} to {audio_max:.4f}")
 
                         received_data_buffer = np.array([])
 
@@ -306,10 +349,23 @@ class WebSocketServer:
         config_alts_dir = self.open_llm_vtuber_main_config.get(
             "CONFIG_ALTS_DIR", "config_alts"
         )
-        for root, _, files in os.walk(config_alts_dir):
-            for file in files:
-                if file.endswith(".yaml"):
-                    config_files.append(file)
+        
+        # Check if the directory exists
+        if not os.path.exists(config_alts_dir):
+            logger.warning(f"Config alternatives directory {config_alts_dir} does not exist")
+            return config_files
+            
+        # Scan the directory for YAML files
+        try:
+            for root, _, files in os.walk(config_alts_dir):
+                for file in files:
+                    if file.endswith((".yaml", ".yml")):
+                        # Only add the file name, not the full path
+                        config_files.append(file)
+                        logger.info(f"Found config file: {file}")
+        except Exception as e:
+            logger.error(f"Error scanning config directory: {e}")
+            
         return config_files
 
     def _load_config_from_file(self, filename: str) -> Dict:
@@ -323,7 +379,13 @@ class WebSocketServer:
             Dict: Loaded configuration or None if loading fails
         """
         if filename == "conf.yaml":
-            return load_config_with_env("conf.yaml")
+            try:
+                config = load_config_with_env("conf.yaml")
+                logger.info("Successfully loaded conf.yaml")
+                return config
+            except Exception as e:
+                logger.error(f"Error loading conf.yaml: {e}")
+                return None
 
         config_alts_dir = self.open_llm_vtuber_main_config.get(
             "CONFIG_ALTS_DIR", "config_alts"
@@ -334,6 +396,8 @@ class WebSocketServer:
             logger.error(f"Config file not found: {file_path}")
             return None
 
+        logger.info(f"Loading config file: {file_path}")
+        
         # Try common encodings first
         encodings = ["utf-8", "utf-8-sig", "gbk", "gb2312", "ascii"]
         content = None
@@ -342,6 +406,7 @@ class WebSocketServer:
             try:
                 with open(file_path, "r", encoding=encoding) as file:
                     content = file.read()
+                    logger.info(f"Successfully read file with encoding: {encoding}")
                     break
             except UnicodeDecodeError:
                 continue
@@ -354,6 +419,7 @@ class WebSocketServer:
                 detected = chardet.detect(raw_data)
                 if detected["encoding"]:
                     content = raw_data.decode(detected["encoding"])
+                    logger.info(f"Successfully read file with detected encoding: {detected['encoding']}")
             except Exception as e:
                 logger.error(
                     f"Error detecting encoding for config file {file_path}: {e}"
@@ -361,7 +427,13 @@ class WebSocketServer:
                 return None
 
         try:
-            return yaml.safe_load(content)
+            config = yaml.safe_load(content)
+            logger.info(f"Successfully parsed YAML from {file_path}")
+            
+            # Log the loaded configuration for debugging
+            logger.info(f"Loaded configuration: {config}")
+            
+            return config
         except yaml.YAMLError as e:
             logger.error(f"Error parsing YAML from {file_path}: {e}")
             return None
@@ -380,17 +452,50 @@ class WebSocketServer:
         self.app.mount("/", StaticFiles(directory="./static", html=True), name="static")
         pass
 
-    # def run(self, host: str = "127.0.0.1", port: int = 8000, log_level: str = "info"):
-    #     """Runs the FastAPI application using Uvicorn."""
-    #     import uvicorn
-
-    #     uvicorn.run(self.app, host=host, port=port, log_level=log_level)
-
-    def run(self, host: str = "127.0.0.1", port: int = 8000, log_level: str = "info"):
+    def run(self, host: str = "127.0.0.1", port: int = None, log_level: str = "info"):
         """Runs the FastAPI application using Uvicorn."""
         import uvicorn
 
-        uvicorn.run(self.app, host=host, port=port, log_level=log_level)
+        # Use port from environment variable if provided
+        env_port = os.environ.get("PORT")
+        if env_port:
+            try:
+                port = int(env_port)
+                logger.info(f"Using PORT from environment variable: {port}")
+            except ValueError:
+                logger.warning(f"Invalid PORT environment variable: {env_port}, using default")
+                port = port or 1018  # Use provided port or default to 1018
+        else:
+            port = port or 1018  # Use provided port or default to 1018
+
+        # Try to find an available port in the range 1025-1050
+        try:
+            # Use the wider port range (1025-1050) for better availability
+            actual_port = find_available_port(1025, max_attempts=25)
+            if actual_port != port:
+                logger.warning(f"Port {port} is in use. Using port {actual_port} instead.")
+            
+            # Print a clear message about the port
+            print(f"\n{'=' * 60}")
+            print(f"Server is running on http://{host}:{actual_port}")
+            print(f"{'=' * 60}\n")
+            
+            # Register port cleanup on exit
+            def cleanup_port():
+                logger.info(f"Cleaning up port {actual_port}")
+                try:
+                    # Try to ensure the port is released
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        s.bind(('0.0.0.0', actual_port))
+                except:
+                    pass
+            
+            atexit.register(cleanup_port)
+            
+            uvicorn.run(self.app, host=host, port=actual_port, log_level=log_level)
+        except RuntimeError as e:
+            logger.error(f"Failed to start server: {e}")
+            raise
 
     @staticmethod
     def clean_cache():
@@ -591,6 +696,7 @@ class ModelManager:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--web", action="store_true", help="Web mode")
+    parser.add_argument("--port", type=int, help="Port to run the server on")
     args = parser.parse_args()
 
     atexit.register(WebSocketServer.clean_cache)
@@ -602,5 +708,8 @@ if __name__ == "__main__":
     
     # Initialize and run the WebSocket server
     server = WebSocketServer(open_llm_vtuber_main_config=config, web=args.web)
-    server.run(host=config["HOST"], port=config["PORT"])
-
+    
+    # Use port from command line if provided, otherwise use from config
+    port = args.port if args.port else config.get("PORT", 1018)
+    
+    server.run(host=config.get("HOST", "0.0.0.0"), port=port)

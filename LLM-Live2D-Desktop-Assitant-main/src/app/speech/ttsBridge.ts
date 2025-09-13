@@ -7,7 +7,7 @@
 
 import { getFeatureFlags } from '../../config/appConfig';
 import { ttsFallback } from '../../infra/http/api';
-import { isLoggedIn } from '../../infra/auth/cognitoAuth';
+import { isLoggedIn } from '../../infra/auth/noneAuth';
 
 // Define the TTS result interface
 export interface TTSResult {
@@ -15,36 +15,81 @@ export interface TTSResult {
   audioData?: ArrayBuffer;
   error?: Error;
   source: 'local' | 'cloud';
+  metrics?: {
+    startTime: number;
+    endTime: number;
+    duration: number;
+    textLength: number;
+  };
+}
+
+// Define logging levels
+enum LogLevel {
+  DEBUG = 0,
+  INFO = 1,
+  WARN = 2,
+  ERROR = 3
+}
+
+// Current log level - can be adjusted via config
+const currentLogLevel = LogLevel.INFO;
+
+// Logger function
+function log(level: LogLevel, message: string, data?: any): void {
+  if (level >= currentLogLevel) {
+    const prefix = LogLevel[level];
+    if (data) {
+      console[level >= LogLevel.WARN ? 'error' : 'log'](`[TTS:${prefix}] ${message}`, data);
+    } else {
+      console[level >= LogLevel.WARN ? 'error' : 'log'](`[TTS:${prefix}] ${message}`);
+    }
+  }
 }
 
 /**
- * Convert text to speech using the local TTS engine
+ * Convert text to speech using the local TTS engine via IPC
  * @param text The text to convert to speech
  * @returns A promise that resolves to the TTS result
  */
 async function localTTS(text: string): Promise<TTSResult> {
+  const startTime = Date.now();
+  log(LogLevel.INFO, `Generating TTS for text (${text.length} chars)`);
+  
   try {
-    // This is a placeholder for the actual local TTS implementation
-    // In a real implementation, this would call the existing local TTS engine
+    // Call the local TTS engine via IPC
+    // This is where we bridge from TypeScript to Python TTS engines
+    const audioData = await window.api.generateSpeech(text);
     
-    // For now, we'll simulate a successful local TTS call
-    // In the actual implementation, this would return the audio data from the local TTS engine
+    const endTime = Date.now();
+    const metrics = {
+      startTime,
+      endTime,
+      duration: endTime - startTime,
+      textLength: text.length
+    };
     
-    // Simulate a delay for the TTS processing
-    await new Promise(resolve => setTimeout(resolve, 100));
+    log(LogLevel.INFO, `TTS generated successfully in ${metrics.duration}ms`);
     
-    // Return a successful result
     return {
       success: true,
-      audioData: new ArrayBuffer(0), // This would be the actual audio data
-      source: 'local'
+      audioData,
+      source: 'local',
+      metrics
     };
   } catch (error) {
-    console.error('Local TTS failed:', error);
+    const endTime = Date.now();
+    log(LogLevel.ERROR, 'Local TTS failed:', error);
+    
     return {
       success: false,
       error: error instanceof Error ? error : new Error(String(error)),
-      source: 'local'
+      source: 'local',
+      metrics: {
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        textLength: text.length
+      }
     };
   }
 }
@@ -56,24 +101,46 @@ async function localTTS(text: string): Promise<TTSResult> {
  * @returns A promise that resolves to the TTS result
  */
 async function cloudTTS(text: string, voice: string = 'default'): Promise<TTSResult> {
+  const startTime = Date.now();
+  log(LogLevel.INFO, `Generating cloud TTS for text (${text.length} chars), voice: ${voice}`);
+  
   try {
     if (!isLoggedIn()) {
-      throw new Error('User is not authenticated');
+      throw new Error('User is not authenticated for cloud TTS');
     }
     
     const audioData = await ttsFallback(text, voice);
     
+    const endTime = Date.now();
+    const metrics = {
+      startTime,
+      endTime,
+      duration: endTime - startTime,
+      textLength: text.length
+    };
+    
+    log(LogLevel.INFO, `Cloud TTS generated successfully in ${metrics.duration}ms`);
+    
     return {
       success: true,
       audioData,
-      source: 'cloud'
+      source: 'cloud',
+      metrics
     };
   } catch (error) {
-    console.error('Cloud TTS failed:', error);
+    const endTime = Date.now();
+    log(LogLevel.ERROR, 'Cloud TTS failed:', error);
+    
     return {
       success: false,
       error: error instanceof Error ? error : new Error(String(error)),
-      source: 'cloud'
+      source: 'cloud',
+      metrics: {
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        textLength: text.length
+      }
     };
   }
 }
@@ -85,7 +152,17 @@ async function cloudTTS(text: string, voice: string = 'default'): Promise<TTSRes
  * @returns A promise that resolves to the TTS result
  */
 export async function speak(text: string, voice: string = 'default'): Promise<TTSResult> {
+  if (!text || text.trim().length === 0) {
+    log(LogLevel.WARN, 'Attempted to speak empty text');
+    return {
+      success: false,
+      error: new Error('Empty text provided'),
+      source: 'local'
+    };
+  }
+  
   const flags = getFeatureFlags();
+  log(LogLevel.DEBUG, `Using TTS with flags:`, flags);
   
   // Check if local TTS is enabled
   if (flags.useLocalTTS) {
@@ -98,7 +175,7 @@ export async function speak(text: string, voice: string = 'default'): Promise<TT
     
     // If local TTS failed and cloud fallbacks are enabled, try cloud TTS
     if (flags.useCloudFallbacks) {
-      console.log('Local TTS failed, falling back to cloud TTS');
+      log(LogLevel.INFO, 'Local TTS failed, falling back to cloud TTS');
       return cloudTTS(text, voice);
     }
     
@@ -111,37 +188,116 @@ export async function speak(text: string, voice: string = 'default'): Promise<TT
 }
 
 /**
- * Play audio data
+ * Play audio data through the Live2D model or fallback to standard audio
  * @param audioData The audio data to play
+ * @param expressionIndex Optional expression index for the Live2D model
  * @returns A promise that resolves when the audio has finished playing
  */
-export function playAudio(audioData: ArrayBuffer): Promise<void> {
+export function playAudio(
+  audioData: ArrayBuffer, 
+  expressionIndex?: number
+): Promise<void> {
   return new Promise((resolve, reject) => {
     try {
-      // Create an audio context
-      const audioContext = new AudioContext();
+      // Convert ArrayBuffer to base64
+      const base64 = arrayBufferToBase64(audioData);
       
-      // Decode the audio data
-      audioContext.decodeAudioData(audioData, (buffer) => {
-        // Create a source node
-        const source = audioContext.createBufferSource();
-        source.buffer = buffer;
+      // Call the audio system's addAudioTask function
+      if (typeof window.addAudioTask === 'function') {
+        window.addAudioTask(
+          base64,         // audio_base64
+          "None",         // instrument_base64
+          [],             // volumes
+          0,              // slice_length
+          null,           // text
+          expressionIndex !== undefined ? [expressionIndex] : null // expression_list
+        );
+        resolve();
+      } else {
+        // Fallback to basic audio playback if addAudioTask is not available
+        log(LogLevel.WARN, 'window.addAudioTask not available, using basic audio playback');
+        const blob = new Blob([audioData], { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
         
-        // Connect the source to the destination (speakers)
-        source.connect(audioContext.destination);
-        
-        // Play the audio
-        source.start(0);
-        
-        // Resolve the promise when the audio has finished playing
-        source.onended = () => {
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
           resolve();
         };
-      }, (error) => {
-        reject(error);
-      });
+        
+        audio.onerror = (error) => {
+          URL.revokeObjectURL(url);
+          reject(error);
+        };
+        
+        audio.play().catch(error => {
+          URL.revokeObjectURL(url);
+          reject(error);
+        });
+      }
     } catch (error) {
       reject(error);
     }
   });
 }
+
+/**
+ * Convert ArrayBuffer to base64 string
+ * @param buffer The ArrayBuffer to convert
+ * @returns The base64 string
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  
+  return window.btoa(binary);
+}
+
+/**
+ * Check if TTS is available
+ * @returns True if TTS is available, false otherwise
+ */
+export async function isTTSAvailable(): Promise<boolean> {
+  try {
+    const flags = getFeatureFlags();
+    
+    // Check if local TTS is enabled and available
+    if (flags.useLocalTTS) {
+      // Check if window.api.generateSpeech is available
+      if (typeof window.api?.generateSpeech !== 'function') {
+        log(LogLevel.WARN, 'Local TTS API is not available');
+        return false;
+      }
+      
+      return true;
+    }
+    
+    // Check if cloud TTS is available
+    if (flags.useCloudFallbacks) {
+      if (!isLoggedIn()) {
+        log(LogLevel.WARN, 'Not logged in for cloud TTS');
+        return false;
+      }
+      
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    log(LogLevel.ERROR, 'Error checking TTS availability:', error);
+    return false;
+  }
+}
+
+// Initialize event listeners for window.api once the window is loaded
+window.addEventListener('DOMContentLoaded', () => {
+  // Check if TTS is available and log the result
+  isTTSAvailable().then(available => {
+    log(LogLevel.INFO, `TTS availability check: ${available ? 'AVAILABLE' : 'NOT AVAILABLE'}`);
+  });
+});
