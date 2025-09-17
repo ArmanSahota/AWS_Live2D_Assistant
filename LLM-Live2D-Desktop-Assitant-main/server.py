@@ -11,6 +11,7 @@ import numpy as np
 import chardet
 from loguru import logger
 from fastapi import FastAPI, WebSocket, APIRouter
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketDisconnect
@@ -78,11 +79,23 @@ class WebSocketServer:
         self.connected_clients: List[WebSocket] = []
         self.open_llm_vtuber_main_config = open_llm_vtuber_main_config
 
+        # Add CORS middleware
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        logger.info("CORS middleware enabled for all origins")
+
         # Initialize model manager  
         self.preload_models = self.open_llm_vtuber_main_config.get("SERVER", {}).get(
             "PRELOAD_MODELS", False
         )
         
+        # Create model_manager unconditionally to avoid AttributeError
+        self.model_manager = None
         if self.preload_models:
             logger.info("Preloading ASR and TTS models...")
             logger.info(
@@ -92,8 +105,9 @@ class WebSocketServer:
                 "Using: " + str(self.open_llm_vtuber_main_config.get("TTS_MODEL"))
             )
 
-            self.model_manager = ModelManager(self.open_llm_vtuber_main_config)
-            self.model_manager.initialize_models()
+            # Note: ModelManager class needs to be implemented or imported
+            # self.model_manager = ModelManager(self.open_llm_vtuber_main_config)
+            # self.model_manager.initialize_models()
 
         self._setup_routes()
         if web:
@@ -216,7 +230,7 @@ class WebSocketServer:
         # This route will initiate its own main.py instance and conversation loop
         @self.app.get("/")
         async def redirect_root():
-            return RedirectResponse(url="/web.html")
+            return RedirectResponse(url="/static/web.html")
 
         @self.app.websocket("/client-ws")
         async def websocket_endpoint(websocket: WebSocket):
@@ -228,7 +242,7 @@ class WebSocketServer:
 
             self.connected_clients.append(websocket)
             print("Connection established")
-
+            logger.info(f"WebSocket client connected from {websocket.client}")
 
             # Initialize components
             l2d, open_llm_vtuber, _ = self._initialize_components(websocket, loop)
@@ -237,7 +251,11 @@ class WebSocketServer:
                 json.dumps({"type": "set-model", "text": l2d.model_info})
             )
             print("Model set")
-            received_data_buffer = np.array([])
+            
+            # Initialize audio buffer and clipboard data
+            received_chunks = []
+            clipboard_data = None
+            
             # start mic
             await websocket.send_text(
                 json.dumps({"type": "control", "text": "start-mic"})
@@ -291,44 +309,66 @@ class WebSocketServer:
                     elif data.get("type") == "mic-audio-data":
                         audio_chunk = data.get("audio")
                         if audio_chunk:
-                            chunk_array = np.array(list(audio_chunk.values()), dtype=np.float32)
-                            received_data_buffer = np.append(received_data_buffer, chunk_array)
-                            print(f"\n[STT DEBUG] Received audio chunk: {len(chunk_array)} samples, total buffer: {len(received_data_buffer)} samples")
+                            # Handle both dict and list formats
+                            if isinstance(audio_chunk, dict):
+                                # Sort by numeric key to ensure proper order
+                                items = sorted(audio_chunk.items(), key=lambda kv: int(kv[0]))
+                                chunk_array = np.array([v for _, v in items], dtype=np.float32)
+                            else:
+                                chunk_array = np.array(audio_chunk, dtype=np.float32)
+                            
+                            received_chunks.append(chunk_array)
+                            print(f"\n[STT DEBUG] Received audio chunk: {len(chunk_array)} samples, total chunks: {len(received_chunks)}")
                         else:
                             print("\n[STT DEBUG] WARNING: Received mic-audio-data with no audio content")
                         
-                        if data.get("clipboardData"):
-                            clipboard_data = data.get("clipboardData")
+                        if "clipboardData" in data:
+                            clipboard_data = data["clipboardData"]
                         print("*", end="")
                         # Log audio data being received
-                        logger.debug(f"Received audio data chunk, buffer size: {len(received_data_buffer)}")
+                        logger.debug(f"Received audio data chunk, total chunks: {len(received_chunks)}")
 
                     elif (
                         data.get("type") == "mic-audio-end"
                         or data.get("type") == "text-input"
                     ):
                         print("\n[STT DEBUG] Received audio data end from front end.")
-                        await websocket.send_text(
-                            json.dumps({"type": "full-text", "text": "Thinking..."})
-                        )
+                        
                         if data.get("type") == "text-input":
                             user_input = data.get("text")
                             print(f"[STT DEBUG] Received text input: {user_input}")
                             logger.info(f"Received text input: {user_input}")
+                            await websocket.send_text(
+                                json.dumps({"type": "full-text", "text": "Thinking..."})
+                            )
                         else:
-                            print(f"[STT DEBUG] Processing audio buffer with {len(received_data_buffer)} samples")
-                            user_input: np.ndarray | str = received_data_buffer
-                            logger.info(f"Processing audio input, buffer size: {len(received_data_buffer)}")
+                            # Handle audio input
+                            if not received_chunks:
+                                print("[STT DEBUG] WARNING: No audio chunks received!")
+                                await websocket.send_text(
+                                    json.dumps({"type": "full-text", "text": "I didn't catch that — try again?"})
+                                )
+                                continue
+                            
+                            # Concatenate all chunks efficiently
+                            received_data_buffer = np.concatenate(received_chunks)
+                            print(f"[STT DEBUG] Processing audio buffer with {len(received_data_buffer)} samples from {len(received_chunks)} chunks")
+                            
                             # Log audio characteristics for debugging
                             if len(received_data_buffer) > 0:
                                 audio_min = np.min(received_data_buffer)
                                 audio_max = np.max(received_data_buffer)
                                 print(f"[STT DEBUG] Audio amplitude range: {audio_min:.4f} to {audio_max:.4f}")
                                 logger.info(f"Audio amplitude range: {audio_min:.4f} to {audio_max:.4f}")
-                            else:
-                                print("[STT DEBUG] WARNING: Audio buffer is empty!")
+                            
+                            user_input: np.ndarray | str = received_data_buffer
+                            logger.info(f"Processing audio input, buffer size: {len(received_data_buffer)}")
+                            await websocket.send_text(
+                                json.dumps({"type": "full-text", "text": "Thinking..."})
+                            )
 
-                        received_data_buffer = np.array([])
+                        # Reset chunks for next audio session
+                        received_chunks = []
 
                         async def _run_conversation():
                             try:
@@ -489,8 +529,8 @@ class WebSocketServer:
 
     def _mount_static_files(self):
         """Mounts static file directories."""
-        self.app.mount("/", StaticFiles(directory="./static", html=True), name="static")
-        pass
+        self.app.mount("/static", StaticFiles(directory="./static", html=True), name="static")
+        logger.info("Static files mounted at /static")
 
     def run(self, host: str = "127.0.0.1", port: int = None, log_level: str = "info"):
         """Runs the FastAPI application using Uvicorn."""
@@ -517,8 +557,15 @@ class WebSocketServer:
             
             # Print a clear message about the port
             print(f"\n{'=' * 60}")
-            print(f"Server is running on http://{host}:{actual_port}")
+            print(f"Server is running: http://{host}:{actual_port}")
+            print(f"WS endpoint:       ws://{host}:{actual_port}/client-ws")
+            print(f"Health check:      http://{host}:{actual_port}/health")
+            print(f"Static files:      http://{host}:{actual_port}/static/")
             print(f"{'=' * 60}\n")
+            
+            logger.info(f"FastAPI server starting on {host}:{actual_port}")
+            logger.info(f"WebSocket endpoint available at /client-ws")
+            logger.info(f"CORS enabled for all origins")
             
             # Register port cleanup on exit (handled by port manager)
             atexit.register(cleanup_ports)

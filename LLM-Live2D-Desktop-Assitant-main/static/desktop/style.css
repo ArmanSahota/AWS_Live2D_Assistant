@@ -18,8 +18,9 @@ html, body {
     position: fixed;
     width: 100vw;
     height: 100vh;
-    z-index: 5;
+    z-index: 1;
     /* Covers the entire screen to allow dragging anywhere */
+    pointer-events: none; /* Allow clicks to pass through to UI elements */
 }
 
 /* Canvas for Live2D model */
@@ -27,26 +28,29 @@ html, body {
     width: 100%;
     height: 100%;
     background: transparent; 
-    display: block; 
+    display: block;
+    pointer-events: auto; /* Re-enable pointer events for the canvas itself */
 }
 
-/* Message display */
+/* Message display - Enhanced for better visibility */
 #message {
-    position: absolute;
-    bottom: 20px;
+    position: fixed;
+    bottom: 8%;
     left: 50%;
     transform: translateX(-50%);
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(0, 0, 0, 0.8);
     color: white;
-    padding: 10px 20px;
-    border-radius: 20px;
+    padding: 12px 24px;
+    border-radius: 25px;
     font-family: Arial, sans-serif;
-    font-size: 16px;
-    max-width: 80%;
+    font-size: clamp(16px, 2.2vw, 24px);
+    max-width: 90%;
     text-align: center;
     z-index: 1000;
     transition: opacity 0.3s ease;
-    text-shadow: 0px 0px 2px #000;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
 }
 
 /* Hide elements with the hidden class */
