@@ -86,12 +86,16 @@ async function init_vad() {
             document.getElementById("message").textContent = "The LLM can't hear you.";
         },
         onSpeechEnd: (audio) => {
+            console.log('[STT DEBUG] Speech ended, audio length:', audio ? audio.length : 0);
             window.audioTaskQueue.clearQueue();
             if (!window.voiceInterruptionOn) {
                 window.stop_mic();
             }
             if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+                console.log('[STT DEBUG] WebSocket is open, sending audio partition');
                 window.sendAudioPartition(audio);
+            } else {
+                console.error('[STT DEBUG] WebSocket not open, cannot send audio. State:', window.ws ? window.ws.readyState : 'null');
             }
             resetNoSpeechTimeout();
         }

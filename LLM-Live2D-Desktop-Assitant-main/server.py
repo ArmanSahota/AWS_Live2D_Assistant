@@ -17,6 +17,7 @@ from starlette.websockets import WebSocketDisconnect
 from module.openllm_vtuber_main import OpenLLMVTuberMain
 from module.live2d_model import Live2dModel
 from tts.stream_audio import AudioPayloadPreparer
+from port_config import get_available_port, cleanup_ports, get_current_port
 import argparse
 
 
@@ -205,6 +206,11 @@ class WebSocketServer:
     def _setup_routes(self):
         """Sets up the WebSocket and broadcast routes."""
 
+        # Health check endpoint
+        @self.app.get("/health")
+        async def health_check():
+            return {"status": "ok", "message": "Server is running"}
+
         # the connection between this server and the frontend client
         # The version 2 of the client-ws. Introduces breaking changes.
         # This route will initiate its own main.py instance and conversation loop
@@ -243,8 +249,32 @@ class WebSocketServer:
                 while True:
                     print(".", end="")
                     message = await websocket.receive_text()
-                    data = json.loads(message)
-                    # print(f"\033\n Received ws req: {data.get('type')}\033[0m\n")
+                    
+                    # Enhanced diagnostic logging
+                    print(f"\n[STT DIAGNOSTIC] Raw message length: {len(message)}")
+                    
+                    try:
+                        data = json.loads(message)
+                        message_type = data.get("type", "NO_TYPE")
+                        print(f"[STT DIAGNOSTIC] Message type: '{message_type}'")
+                        print(f"[STT DIAGNOSTIC] Message keys: {list(data.keys())}")
+                        
+                        # Log message structure for debugging
+                        for key, value in data.items():
+                            if key == "audio" and isinstance(value, dict):
+                                print(f"[STT DIAGNOSTIC] Audio data: {len(value)} samples")
+                                audio_values = list(value.values())
+                                if audio_values:
+                                    audio_min = min(audio_values)
+                                    audio_max = max(audio_values)
+                                    print(f"[STT DIAGNOSTIC] Audio range: {audio_min:.4f} to {audio_max:.4f}")
+                            else:
+                                print(f"[STT DIAGNOSTIC] {key}: {type(value).__name__} ({len(str(value))} chars)")
+                                
+                    except json.JSONDecodeError as e:
+                        print(f"[STT DIAGNOSTIC] JSON Parse Error: {e}")
+                        print(f"[STT DIAGNOSTIC] Raw message preview: {message[:200]}...")
+                        continue
 
                     if data.get("type") == "interrupt-signal":
                         print("Start receiving audio data from front end.")
@@ -259,10 +289,14 @@ class WebSocketServer:
                             # conversation_task.cancel()
 
                     elif data.get("type") == "mic-audio-data":
-                        received_data_buffer = np.append(
-                            received_data_buffer,
-                            np.array(list(data.get("audio").values()), dtype=np.float32),
-                        )
+                        audio_chunk = data.get("audio")
+                        if audio_chunk:
+                            chunk_array = np.array(list(audio_chunk.values()), dtype=np.float32)
+                            received_data_buffer = np.append(received_data_buffer, chunk_array)
+                            print(f"\n[STT DEBUG] Received audio chunk: {len(chunk_array)} samples, total buffer: {len(received_data_buffer)} samples")
+                        else:
+                            print("\n[STT DEBUG] WARNING: Received mic-audio-data with no audio content")
+                        
                         if data.get("clipboardData"):
                             clipboard_data = data.get("clipboardData")
                         print("*", end="")
@@ -273,21 +307,26 @@ class WebSocketServer:
                         data.get("type") == "mic-audio-end"
                         or data.get("type") == "text-input"
                     ):
-                        print("Received audio data end from front end.")
+                        print("\n[STT DEBUG] Received audio data end from front end.")
                         await websocket.send_text(
                             json.dumps({"type": "full-text", "text": "Thinking..."})
                         )
                         if data.get("type") == "text-input":
                             user_input = data.get("text")
+                            print(f"[STT DEBUG] Received text input: {user_input}")
                             logger.info(f"Received text input: {user_input}")
                         else:
+                            print(f"[STT DEBUG] Processing audio buffer with {len(received_data_buffer)} samples")
                             user_input: np.ndarray | str = received_data_buffer
                             logger.info(f"Processing audio input, buffer size: {len(received_data_buffer)}")
                             # Log audio characteristics for debugging
                             if len(received_data_buffer) > 0:
                                 audio_min = np.min(received_data_buffer)
                                 audio_max = np.max(received_data_buffer)
+                                print(f"[STT DEBUG] Audio amplitude range: {audio_min:.4f} to {audio_max:.4f}")
                                 logger.info(f"Audio amplitude range: {audio_min:.4f} to {audio_max:.4f}")
+                            else:
+                                print("[STT DEBUG] WARNING: Audio buffer is empty!")
 
                         received_data_buffer = np.array([])
 
@@ -337,7 +376,8 @@ class WebSocketServer:
                             json.dumps({"type": "background-files", "files": bg_files})
                         )
                     else:
-                        print("Unknown data type received.")
+                        print(f"[STT DIAGNOSTIC] UNKNOWN MESSAGE TYPE: '{message_type}'")
+                        print(f"[STT DIAGNOSTIC] Full unknown message: {json.dumps(data, indent=2)}")
 
             except WebSocketDisconnect:
                 print("Client disconnected")
@@ -468,10 +508,10 @@ class WebSocketServer:
         else:
             port = port or 1018  # Use provided port or default to 1018
 
-        # Try to find an available port in the range 1025-1050
+        # Use the new port manager for consistent port allocation
         try:
-            # Use the wider port range (1025-1050) for better availability
-            actual_port = find_available_port(1025, max_attempts=25)
+            # Get available port using the new port manager
+            actual_port = get_available_port(port)
             if actual_port != port:
                 logger.warning(f"Port {port} is in use. Using port {actual_port} instead.")
             
@@ -480,17 +520,8 @@ class WebSocketServer:
             print(f"Server is running on http://{host}:{actual_port}")
             print(f"{'=' * 60}\n")
             
-            # Register port cleanup on exit
-            def cleanup_port():
-                logger.info(f"Cleaning up port {actual_port}")
-                try:
-                    # Try to ensure the port is released
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                        s.bind(('0.0.0.0', actual_port))
-                except:
-                    pass
-            
-            atexit.register(cleanup_port)
+            # Register port cleanup on exit (handled by port manager)
+            atexit.register(cleanup_ports)
             
             uvicorn.run(self.app, host=host, port=actual_port, log_level=log_level)
         except RuntimeError as e:

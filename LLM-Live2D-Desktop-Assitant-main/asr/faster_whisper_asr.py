@@ -69,24 +69,65 @@ class VoiceRecognition(ASRInterface):
     def transcribe_np(self, audio: np.ndarray) -> str:
         logger.info("Transcribing audio with Faster Whisper...")
         
+        # Enhanced diagnostic logging
+        print(f"\n[ASR DIAGNOSTIC] Input audio shape: {audio.shape}")
+        print(f"[ASR DIAGNOSTIC] Input audio dtype: {audio.dtype}")
+        print(f"[ASR DIAGNOSTIC] Audio length: {len(audio)} samples ({len(audio)/16000:.2f} seconds)")
+        
+        if len(audio) > 0:
+            audio_min = np.min(audio)
+            audio_max = np.max(audio)
+            audio_mean = np.mean(audio)
+            audio_std = np.std(audio)
+            
+            print(f"[ASR DIAGNOSTIC] Audio stats - Min: {audio_min:.4f}, Max: {audio_max:.4f}")
+            print(f"[ASR DIAGNOSTIC] Audio stats - Mean: {audio_mean:.4f}, Std: {audio_std:.4f}")
+            
+            # Check for common audio issues
+            zero_count = np.sum(audio == 0)
+            if zero_count > len(audio) * 0.9:
+                print(f"[ASR DIAGNOSTIC] WARNING: Audio is mostly silent ({zero_count}/{len(audio)} zeros)")
+                
+            if audio_max - audio_min < 0.01:
+                print(f"[ASR DIAGNOSTIC] WARNING: Very low audio dynamic range")
+                
+            # Check sample rate assumptions
+            if len(audio) < 1600:  # Less than 0.1 seconds at 16kHz
+                print(f"[ASR DIAGNOSTIC] WARNING: Audio too short for reliable transcription")
+        else:
+            print(f"[ASR DIAGNOSTIC] ERROR: Empty audio array")
+            return ""
+        
         try:
+            print(f"[ASR DIAGNOSTIC] Starting Whisper transcription...")
             segments, info = self.model.transcribe(
                 audio,
                 beam_size=5 if self.BEAM_SEARCH else 1,
                 language=self.LANG,
                 condition_on_previous_text=False,
             )
-
-            text = [segment.text for segment in segments]
             
-            if not text:
+            print(f"[ASR DIAGNOSTIC] Transcription info: {info}")
+            
+            text_segments = []
+            for i, segment in enumerate(segments):
+                confidence = getattr(segment, 'avg_logprob', 'N/A')
+                print(f"[ASR DIAGNOSTIC] Segment {i}: '{segment.text}' (confidence: {confidence})")
+                text_segments.append(segment.text)
+            
+            if not text_segments:
+                print(f"[ASR DIAGNOSTIC] WARNING: No text segments generated")
                 logger.warning("No text transcribed from audio")
                 return ""
             else:
-                result = "".join(text)
+                result = "".join(text_segments)
+                print(f"[ASR DIAGNOSTIC] Final transcription: '{result}'")
                 logger.info(f"Transcribed text: {result}")
                 return result
                 
         except Exception as e:
+            print(f"[ASR DIAGNOSTIC] Transcription error: {e}")
             logger.error(f"Error transcribing audio: {e}")
+            import traceback
+            traceback.print_exc()
             return ""

@@ -30,6 +30,7 @@ let tray = null;
 let contextMenu;
 let currentConfigFile = '';
 let configFiles = [];
+let currentSensitivity = 0.9; // Default sensitivity value (90%)
 let backendProcess = null; // FIX: Added missing declaration
 const isMac = process.platform === 'darwin';
 
@@ -59,11 +60,11 @@ async function updateContextMenu() {
     {
       label: 'Speech Sensitivity',
       submenu: [
-        { label: 'Very High (70%)', type: 'radio', checked: false, click: () => setSensitivity(0.7) },
-        { label: 'High (80%)', type: 'radio', checked: false, click: () => setSensitivity(0.8) },
-        { label: 'Medium (90%)', type: 'radio', checked: true, click: () => setSensitivity(0.9) },
-        { label: 'Low (95%)', type: 'radio', checked: false, click: () => setSensitivity(0.95) },
-        { label: 'Very Low (99%)', type: 'radio', checked: false, click: () => setSensitivity(0.99) }
+        { label: 'Very High (70%)', type: 'radio', checked: currentSensitivity === 0.7, click: () => setSensitivity(0.7) },
+        { label: 'High (80%)', type: 'radio', checked: currentSensitivity === 0.8, click: () => setSensitivity(0.8) },
+        { label: 'Medium (90%)', type: 'radio', checked: currentSensitivity === 0.9, click: () => setSensitivity(0.9) },
+        { label: 'Low (95%)', type: 'radio', checked: currentSensitivity === 0.95, click: () => setSensitivity(0.95) },
+        { label: 'Very Low (99%)', type: 'radio', checked: currentSensitivity === 0.99, click: () => setSensitivity(0.99) }
       ]
     },
     {
@@ -267,31 +268,59 @@ ipcMain.on('set-ignore-mouse-events', (event, ignore) => {
 });
 
 ipcMain.on('show-context-menu', (event, x, y) => {
+  // Add diagnostic logging to identify the argument type issue
+  console.log('[DEBUG] show-context-menu called with:', { x, y, xType: typeof x, yType: typeof y });
+  
+  // Ensure coordinates are integers
+  const safeX = Math.round(Number(x)) || 0;
+  const safeY = Math.round(Number(y)) || 0;
+  
+  console.log('[DEBUG] Converted coordinates:', { safeX, safeY });
+  
   // Make sure contextMenu is initialized before trying to use it
   if (!contextMenu) {
+    console.log('[DEBUG] Context menu not initialized, updating...');
     updateContextMenu().then(() => {
-      contextMenu.popup({
-        window: mainWindow,
-        x: x,
-        y: y,
-      });
+      try {
+        console.log('[DEBUG] Showing context menu at:', { x: safeX, y: safeY });
+        contextMenu.popup({
+          window: mainWindow,
+          x: safeX,
+          y: safeY,
+        });
+      } catch (error) {
+        console.error('[ERROR] Context menu popup failed:', error);
+      }
+    }).catch(error => {
+      console.error('[ERROR] Failed to update context menu:', error);
     });
   } else {
-    contextMenu.popup({
-      window: mainWindow,
-      x: x,
-      y: y,
-    });
+    try {
+      console.log('[DEBUG] Showing existing context menu at:', { x: safeX, y: safeY });
+      contextMenu.popup({
+        window: mainWindow,
+        x: safeX,
+        y: safeY,
+      });
+    } catch (error) {
+      console.error('[ERROR] Context menu popup failed:', error);
+    }
   }
 });
 
 ipcMain.on('update-menu-checked', (event, label, checked) => {
-  const menuItem = contextMenu.items.find(item => item.label === label);
-  if (menuItem) {
-    menuItem.checked = checked;
-    Menu.setApplicationMenu(Menu.buildFromTemplate(contextMenu.items));
-    tray.setContextMenu(contextMenu);
+  // Rebuild the menu with the updated checked state
+  // This is a workaround since we can't directly modify menu items
+  if (label === 'Microphone') {
+    toggleMicrophone(checked);
+  } else if (label === 'Show Subtitles') {
+    toggleSubtitles(checked);
+  } else if (label === 'Allow Interruption') {
+    toggleInterruption(checked);
+  } else if (label === 'Wake-up') {
+    toggleWakeUp(checked);
   }
+  // The menu will be updated through the toggle functions
 });
 
 ipcMain.on('update-config-files', (event, files) => {
@@ -300,13 +329,18 @@ ipcMain.on('update-config-files', (event, files) => {
 });
 
 ipcMain.on('update-sensitivity', (event, value) => {
-  const sensitivityMenu = contextMenu.items.find(item => item.label === 'Speech Sensitivity');
-  if (sensitivityMenu) {
-    const threshold = value * 100;
-    sensitivityMenu.submenu.items.forEach(item => {
-      item.checked = item.label.includes(`(${threshold}%)`);
-    });
-  }
+  console.log('[DEBUG] update-sensitivity called with value:', value);
+  
+  // FIXED: Instead of trying to access contextMenu.items (which doesn't exist),
+  // we store the current sensitivity value and rebuild the menu with the correct checked state
+  currentSensitivity = value;
+  
+  // Rebuild the context menu with the updated sensitivity
+  updateContextMenu().then(() => {
+    console.log('[DEBUG] Context menu updated with new sensitivity:', value);
+  }).catch(error => {
+    console.error('[ERROR] Failed to update context menu:', error);
+  });
 });
 
 ipcMain.handle('get-clipboard-content', async () => {

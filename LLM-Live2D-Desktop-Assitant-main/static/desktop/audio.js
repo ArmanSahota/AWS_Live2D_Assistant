@@ -36,20 +36,66 @@ function playAudioLipSync(audio_base64, instrument_base64, volumes, slice_length
         return;
     }
 
-    // SUBTITLE DEBUG: Log text parameter and element state
+    // ENHANCED SUBTITLE DEBUG: Comprehensive logging
+    console.log("[SUBTITLE DEBUG] ========== SUBTITLE DIAGNOSTIC START ==========");
     console.log("[SUBTITLE DEBUG] playAudioLipSync called with text:", text);
+    console.log("[SUBTITLE DEBUG] Text type:", typeof text);
+    console.log("[SUBTITLE DEBUG] Text length:", text ? text.length : 0);
+    
     const messageElement = document.getElementById("message");
     console.log("[SUBTITLE DEBUG] Message element found:", !!messageElement);
-    console.log("[SUBTITLE DEBUG] Message element classes:", messageElement?.className);
-    console.log("[SUBTITLE DEBUG] Message element visibility:", messageElement ? window.getComputedStyle(messageElement).display : 'N/A');
+    
+    if (messageElement) {
+        const computedStyle = window.getComputedStyle(messageElement);
+        console.log("[SUBTITLE DEBUG] Element details:");
+        console.log("  - ID:", messageElement.id);
+        console.log("  - Classes:", messageElement.className);
+        console.log("  - Current text content:", messageElement.textContent);
+        console.log("  - Display style:", computedStyle.display);
+        console.log("  - Visibility:", computedStyle.visibility);
+        console.log("  - Opacity:", computedStyle.opacity);
+        console.log("  - Z-index:", computedStyle.zIndex);
+        console.log("  - Position:", computedStyle.position);
+        console.log("  - Hidden class present:", messageElement.classList.contains('hidden'));
+        
+        // Check parent visibility
+        let parent = messageElement.parentElement;
+        if (parent) {
+            const parentStyle = window.getComputedStyle(parent);
+            console.log("[SUBTITLE DEBUG] Parent element:");
+            console.log("  - ID:", parent.id);
+            console.log("  - Display:", parentStyle.display);
+            console.log("  - Visibility:", parentStyle.visibility);
+        }
+    } else {
+        console.error("[SUBTITLE DEBUG] ERROR: Message element not found in DOM!");
+    }
 
     window.fullResponse += text;
     if (text) {
-        document.getElementById("message").textContent = text;
-        console.log("[SUBTITLE DEBUG] Text set to message element:", text);
+        if (messageElement) {
+            const oldText = messageElement.textContent;
+            messageElement.textContent = text;
+            console.log("[SUBTITLE DEBUG] Text updated:");
+            console.log("  - Old text:", oldText);
+            console.log("  - New text:", text);
+            console.log("  - Verification:", messageElement.textContent === text);
+            
+            // Force style recalculation
+            messageElement.offsetHeight; // Trigger reflow
+            
+            // Check final visibility
+            const finalStyle = window.getComputedStyle(messageElement);
+            console.log("[SUBTITLE DEBUG] After update:");
+            console.log("  - Display:", finalStyle.display);
+            console.log("  - Is visible:", finalStyle.display !== 'none' && finalStyle.visibility !== 'hidden');
+        } else {
+            console.error("[SUBTITLE DEBUG] Cannot set text - element not found!");
+        }
     } else {
         console.log("[SUBTITLE DEBUG] No text provided, skipping subtitle update");
     }
+    console.log("[SUBTITLE DEBUG] ========== SUBTITLE DIAGNOSTIC END ==========");
 
     if (instrument_base64 != "None" && instrument_base64) {
         try {

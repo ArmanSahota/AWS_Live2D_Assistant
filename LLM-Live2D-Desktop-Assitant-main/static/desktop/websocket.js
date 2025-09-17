@@ -46,6 +46,9 @@ async function connectWebSocket() {
             console.log('WebSocket connected successfully');
             isReconnecting = false;
             
+            // Make ws globally available
+            window.ws = ws;
+            
             // Update UI status
             if (window.updateConnectionStatus) {
                 window.updateConnectionStatus('connected');
@@ -106,9 +109,22 @@ function handleWebSocketMessage(data) {
     
     switch(data.type) {
         case 'full-text':
+            console.log('[SUBTITLE DEBUG] Received full-text message via WebSocket:', data.text);
             // Display subtitles
             if (window.displaySubtitles) {
+                console.log('[SUBTITLE DEBUG] Calling window.displaySubtitles function');
                 window.displaySubtitles(data.text);
+            } else {
+                console.log('[SUBTITLE DEBUG] window.displaySubtitles function not found!');
+                // Fallback: directly update the message element
+                const messageElement = document.getElementById('message');
+                if (messageElement) {
+                    console.log('[SUBTITLE DEBUG] Using fallback - directly updating message element');
+                    messageElement.textContent = data.text;
+                    messageElement.classList.remove('hidden'); // Ensure it's visible
+                } else {
+                    console.error('[SUBTITLE DEBUG] Message element not found for fallback!');
+                }
             }
             break;
             
@@ -122,8 +138,15 @@ function handleWebSocketMessage(data) {
         case 'control':
             // Handle control messages
             if (data.text === 'start-mic') {
-                if (window.startMicrophone) {
+                console.log('[STT DEBUG] Received start-mic command from server');
+                if (window.start_mic) {
+                    console.log('[STT DEBUG] Calling start_mic function');
+                    window.start_mic();
+                } else if (window.startMicrophone) {
+                    console.log('[STT DEBUG] Calling startMicrophone function');
                     window.startMicrophone();
+                } else {
+                    console.error('[STT DEBUG] No microphone start function found!');
                 }
             }
             break;
@@ -178,11 +201,63 @@ document.addEventListener('DOMContentLoaded', () => {
     connectWebSocket();
 });
 
+// Function to send audio data in chunks (missing function that VAD calls)
+const chunkSize = 4096;
+async function sendAudioPartition(audio) {
+    console.log('[STT DEBUG] sendAudioPartition called with audio length:', audio ? audio.length : 0);
+    
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        console.error('[STT DEBUG] WebSocket not connected, cannot send audio');
+        return;
+    }
+    
+    if (!audio || audio.length === 0) {
+        console.error('[STT DEBUG] No audio data to send');
+        return;
+    }
+    
+    // Log audio characteristics for debugging
+    const audioMin = Math.min(...audio);
+    const audioMax = Math.max(...audio);
+    console.log(`[STT DEBUG] Audio amplitude range: ${audioMin.toFixed(4)} to ${audioMax.toFixed(4)}`);
+    
+    // Send audio in chunks
+    let chunksSent = 0;
+    for (let index = 0; index < audio.length; index += chunkSize) {
+        const endIndex = Math.min(index + chunkSize, audio.length);
+        const chunk = audio.slice(index, endIndex);
+        
+        // Convert to object format expected by server
+        const chunkObject = {};
+        for (let i = 0; i < chunk.length; i++) {
+            chunkObject[i] = chunk[i];
+        }
+        
+        ws.send(JSON.stringify({ 
+            type: "mic-audio-data", 
+            audio: chunkObject 
+        }));
+        chunksSent++;
+    }
+    
+    console.log(`[STT DEBUG] Sent ${chunksSent} audio chunks`);
+    
+    // Send end signal
+    ws.send(JSON.stringify({ type: "mic-audio-end" }));
+    console.log('[STT DEBUG] Sent mic-audio-end signal');
+}
+
+// Make sendAudioPartition available globally
+window.sendAudioPartition = sendAudioPartition;
+// Make ws available globally for other scripts
+window.ws = ws;
+
 // Export functions for global use
 window.wsConnection = {
     connect: connectWebSocket,
     sendAudioData: sendAudioData,
     sendAudioEnd: sendAudioEnd,
     sendTextInput: sendTextInput,
+    sendAudioPartition: sendAudioPartition,
     getState: () => ws ? ws.readyState : WebSocket.CLOSED
 };

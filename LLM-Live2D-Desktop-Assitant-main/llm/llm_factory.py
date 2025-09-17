@@ -9,7 +9,9 @@ from .claude import LLM as ClaudeLLM
 class LLMFactory:
     @staticmethod
     def create_llm(llm_provider, **kwargs) -> Type[LLMInterface]:
-
+        # Make provider name case-insensitive
+        llm_provider = llm_provider.lower() if llm_provider else ""
+        
         if llm_provider == "ollama":
             return OllamaLLM(
                 system=kwargs.get("SYSTEM_PROMPT"),
