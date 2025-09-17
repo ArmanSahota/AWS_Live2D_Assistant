@@ -1,5 +1,25 @@
 [
     {
+        "name": "default",
+        "description": "Default Live2D Model",
+        "url": "static/desktop/models/default/default.model3.json",
+        "kScale": 0.0003,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "kXOffset": 1150,
+        "kYOffset": 0,
+        "idleMotionGroupName": "Idle",
+        "emotionMap": {
+            "neutral": 0,
+            "anger": 1,
+            "disgust": 1,
+            "fear": 2,
+            "joy": 3,
+            "sadness": 2,
+            "surprise": 3
+        }
+    },
+    {
         "name": "shizuku-local",
         "description": "Orange-Haired Girl, locally available. no internet required.",
         "url": "/live2d-models/shizuku/shizuku.model.json",

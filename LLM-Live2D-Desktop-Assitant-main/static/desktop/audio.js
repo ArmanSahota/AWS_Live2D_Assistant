@@ -36,9 +36,19 @@ function playAudioLipSync(audio_base64, instrument_base64, volumes, slice_length
         return;
     }
 
+    // SUBTITLE DEBUG: Log text parameter and element state
+    console.log("[SUBTITLE DEBUG] playAudioLipSync called with text:", text);
+    const messageElement = document.getElementById("message");
+    console.log("[SUBTITLE DEBUG] Message element found:", !!messageElement);
+    console.log("[SUBTITLE DEBUG] Message element classes:", messageElement?.className);
+    console.log("[SUBTITLE DEBUG] Message element visibility:", messageElement ? window.getComputedStyle(messageElement).display : 'N/A');
+
     window.fullResponse += text;
     if (text) {
         document.getElementById("message").textContent = text;
+        console.log("[SUBTITLE DEBUG] Text set to message element:", text);
+    } else {
+        console.log("[SUBTITLE DEBUG] No text provided, skipping subtitle update");
     }
 
     if (instrument_base64 != "None" && instrument_base64) {

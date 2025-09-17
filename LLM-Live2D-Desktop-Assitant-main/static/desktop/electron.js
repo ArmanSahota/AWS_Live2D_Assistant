@@ -64,11 +64,30 @@ window.generateAndPlaySpeech = generateAndPlaySpeech;
 
 // Handle UI events
 window.electronAPI.onToggleSubtitles((isChecked) => {
+    console.log("[SUBTITLE DEBUG] Toggle subtitles called with:", isChecked);
     const messageDiv = document.getElementById('message');
+    console.log("[SUBTITLE DEBUG] Message div found:", !!messageDiv);
+    console.log("[SUBTITLE DEBUG] Current classes before toggle:", messageDiv?.className);
+    
     if (isChecked) {
         messageDiv.classList.remove('hidden');
+        console.log("[SUBTITLE DEBUG] Removed 'hidden' class - subtitles should be visible");
     } else {
         messageDiv.classList.add('hidden');
+        console.log("[SUBTITLE DEBUG] Added 'hidden' class - subtitles should be hidden");
+    }
+    console.log("[SUBTITLE DEBUG] Classes after toggle:", messageDiv?.className);
+});
+
+// Initialize subtitle visibility on page load
+// Since the default is now checked: true in main.js, subtitles should be visible by default
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("[SUBTITLE DEBUG] Initializing subtitle visibility on page load");
+    const messageDiv = document.getElementById('message');
+    if (messageDiv) {
+        // Remove hidden class to ensure subtitles are visible by default
+        messageDiv.classList.remove('hidden');
+        console.log("[SUBTITLE DEBUG] Initialized: Subtitles are visible by default");
     }
 });
 

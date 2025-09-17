@@ -9,10 +9,11 @@ class ASRFactory:
             from .faster_whisper_asr import VoiceRecognition as FasterWhisperASR
 
             return FasterWhisperASR(
-                model_path=kwargs.get("model_path"),
+                model_path=kwargs.get("model_path") or kwargs.get("model_size"),  # Support both model_path and model_size
                 download_root=kwargs.get("download_root"),
                 language=kwargs.get("language"),
                 device=kwargs.get("device"),
+                compute_type=kwargs.get("compute_type"),
             )
         elif system_name == "WhisperCPP":
             from .whisper_cpp_asr import VoiceRecognition as WhisperCPPASR

@@ -46,6 +46,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     // Custom URL protocol handler
     handleAuthCallback: (callback) => ipcRenderer.on('auth-callback', (event, data) => callback(data)),
+    
+    // Transcription logging
+    logTranscription: (text) => ipcRenderer.send('log:transcription', text),
+    getTranscriptionHistory: () => ipcRenderer.invoke('get-transcription-history'),
 });
 
 // Also expose the API as window.api for backward compatibility

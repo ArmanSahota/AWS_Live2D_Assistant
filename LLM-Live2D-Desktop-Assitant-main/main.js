@@ -47,7 +47,7 @@ async function updateContextMenu() {
   // Simple config menu items
 
   contextMenu = Menu.buildFromTemplate([
-    { label: 'Show Subtitles', type: 'checkbox', checked: false, click: (menuItem) => toggleSubtitles(menuItem.checked) },
+    { label: 'Show Subtitles', type: 'checkbox', checked: true, click: (menuItem) => toggleSubtitles(menuItem.checked) },
     { label: 'Microphone', type: 'checkbox', checked: true, click: (menuItem) => toggleMicrophone(menuItem.checked) },
     { 
       label: 'Select Microphone',
