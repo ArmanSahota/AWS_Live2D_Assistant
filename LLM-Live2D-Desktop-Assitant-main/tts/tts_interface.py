@@ -1,5 +1,6 @@
 import abc
 import os
+import sys
 from playsound3 import playsound
 
 
@@ -41,13 +42,87 @@ class TTSInterface(metaclass=abc.ABCMeta):
 
     def play_audio_file_local(self, audio_file_path: str) -> None:
         """
-        Play the audio file locally on this device (not stream to some kind of live2d front end).
-
+        Play the audio file locally on this device with multiple fallback methods.
+        
         audio_file_path: str
             the path to the audio file
         """
-        playsound(audio_file_path)
+        print(f"[AUDIO FIX] Attempting to play audio file: {audio_file_path}")
+        print(f"[AUDIO FIX] File exists: {os.path.exists(audio_file_path)}")
         
+        if not os.path.exists(audio_file_path):
+            print(f"[AUDIO FIX] ERROR: Audio file does not exist!")
+            return
+            
+        # Method 1: Try playsound3 (original method)
+        try:
+            print(f"[AUDIO FIX] Method 1: Trying playsound3...")
+            playsound(audio_file_path)
+            print(f"[AUDIO FIX] ✓ playsound3 succeeded")
+            return
+        except Exception as e:
+            print(f"[AUDIO FIX] ✗ playsound3 failed: {e}")
+        
+        # Method 2: Try pygame
+        try:
+            print(f"[AUDIO FIX] Method 2: Trying pygame...")
+            import pygame
+            pygame.mixer.init()
+            pygame.mixer.music.load(audio_file_path)
+            pygame.mixer.music.play()
+            while pygame.mixer.music.get_busy():
+                pygame.time.wait(100)
+            pygame.mixer.quit()
+            print(f"[AUDIO FIX] ✓ pygame succeeded")
+            return
+        except Exception as e:
+            print(f"[AUDIO FIX] ✗ pygame failed: {e}")
+        
+        # Method 3: Try system command
+        try:
+            print(f"[AUDIO FIX] Method 3: Trying system command...")
+            import subprocess
+            
+            if sys.platform == "win32":
+                # Windows: use start command
+                subprocess.run(["start", "/wait", audio_file_path], shell=True, check=True)
+            elif sys.platform == "darwin":
+                # macOS: use afplay
+                subprocess.run(["afplay", audio_file_path], check=True)
+            else:
+                # Linux: try multiple players
+                players = ["aplay", "paplay", "mpg123", "ffplay"]
+                for player in players:
+                    try:
+                        subprocess.run([player, audio_file_path], check=True, 
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        print(f"[AUDIO FIX] ✓ {player} succeeded")
+                        return
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+                raise Exception("No suitable audio player found on Linux")
+            
+            print(f"[AUDIO FIX] ✓ System command succeeded")
+            return
+        except Exception as e:
+            print(f"[AUDIO FIX] ✗ System command failed: {e}")
+        
+        # Method 4: Try winsound (Windows only)
+        if sys.platform == "win32":
+            try:
+                print(f"[AUDIO FIX] Method 4: Trying winsound...")
+                import winsound
+                winsound.PlaySound(audio_file_path, winsound.SND_FILENAME)
+                print(f"[AUDIO FIX] ✓ winsound succeeded")
+                return
+            except Exception as e:
+                print(f"[AUDIO FIX] ✗ winsound failed: {e}")
+        
+        # If all methods fail
+        print(f"[AUDIO FIX] ❌ ALL AUDIO PLAYBACK METHODS FAILED!")
+        print(f"[AUDIO FIX] This explains why you can't hear the EdgeTTS audio.")
+        print(f"[AUDIO FIX] Consider installing: pip install pygame")
+        raise Exception("All audio playback methods failed")
 
     def generate_cache_file_name(self, file_name_no_ext=None, file_extension="wav"):
         """

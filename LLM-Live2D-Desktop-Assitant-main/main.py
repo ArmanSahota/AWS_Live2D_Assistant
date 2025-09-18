@@ -358,7 +358,47 @@ class OpenLLMVTuberMain:
         try:
             if self.verbose:
                 print(f">> Playing {filepath}...")
-            self.tts.play_audio_file_local(filepath)
+            
+            # DIAGNOSTIC: Check audio playback method
+            print(f"[AUDIO DEBUG] About to play audio file: {filepath}")
+            print(f"[AUDIO DEBUG] File exists: {os.path.exists(filepath)}")
+            if os.path.exists(filepath):
+                file_size = os.path.getsize(filepath)
+                print(f"[AUDIO DEBUG] File size: {file_size} bytes")
+            
+            # DIAGNOSTIC: Try local playback first
+            try:
+                print("[AUDIO DEBUG] Attempting local audio playback...")
+                self.tts.play_audio_file_local(filepath)
+                print("[AUDIO DEBUG] Local audio playback completed successfully")
+            except Exception as local_error:
+                print(f"[AUDIO DEBUG] Local audio playback failed: {local_error}")
+                print("[AUDIO DEBUG] This explains why you can't hear the audio!")
+                
+                # Try alternative playback method
+                try:
+                    import pygame
+                    pygame.mixer.init()
+                    pygame.mixer.music.load(filepath)
+                    pygame.mixer.music.play()
+                    while pygame.mixer.music.get_busy():
+                        pygame.time.wait(100)
+                    print("[AUDIO DEBUG] Pygame audio playback completed")
+                except Exception as pygame_error:
+                    print(f"[AUDIO DEBUG] Pygame audio playback also failed: {pygame_error}")
+                    
+                    # Try system command as last resort
+                    try:
+                        import subprocess
+                        if sys.platform == "win32":
+                            subprocess.run(["start", filepath], shell=True, check=True)
+                        elif sys.platform == "darwin":
+                            subprocess.run(["afplay", filepath], check=True)
+                        else:
+                            subprocess.run(["aplay", filepath], check=True)
+                        print("[AUDIO DEBUG] System command audio playback completed")
+                    except Exception as system_error:
+                        print(f"[AUDIO DEBUG] System command audio playback failed: {system_error}")
 
             self.tts.remove_file(filepath, verbose=self.verbose)
         except ValueError as e:

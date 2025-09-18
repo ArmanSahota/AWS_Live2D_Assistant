@@ -393,6 +393,23 @@ class WebSocketServer:
                                     })
                                 )
                                 print("One Conversation Loop Completed")
+                                
+                                # DIAGNOSTIC: Check if we need to restart microphone
+                                print("[CONVERSATION DEBUG] Conversation task completed")
+                                print(f"[CONVERSATION DEBUG] WebSocket still connected: {websocket.client_state}")
+                                
+                                # DIAGNOSTIC: Send start-mic signal to restart listening
+                                try:
+                                    await websocket.send_text(
+                                        json.dumps({"type": "control", "text": "start-mic"})
+                                    )
+                                    print("[CONVERSATION DEBUG] Sent start-mic signal to restart listening")
+                                except Exception as e:
+                                    print(f"[CONVERSATION DEBUG] Failed to send start-mic signal: {e}")
+                                
+                                # DIAGNOSTIC: Reset conversation_task to None
+                                conversation_task = None
+                                print("[CONVERSATION DEBUG] Reset conversation_task to None")
                             except asyncio.CancelledError:
                                 print("Conversation task was cancelled.")
                             except InterruptedError as e:
