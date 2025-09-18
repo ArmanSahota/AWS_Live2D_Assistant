@@ -1,11 +1,22 @@
 from typing import Type
 from .tts_interface import TTSInterface
+from loguru import logger
 
 
 class TTSFactory:
     @staticmethod
     def get_tts_engine(engine_type, **kwargs) -> Type[TTSInterface]:
-        if engine_type == "AzureTTS":
+        if engine_type == "EDGE_TTS":
+            from .edge_tts_engine import EdgeTTSEngine
+            
+            voice  = kwargs.get("voice")
+            rate   = kwargs.get("rate", "+0%")
+            pitch  = kwargs.get("pitch", "+0Hz")
+            volume = kwargs.get("volume", "+0%")
+            style  = kwargs.get("style")
+            logger.info(f"Creating EDGE_TTS engine: voice={voice} rate={rate} pitch={pitch} volume={volume} style={style}")
+            return EdgeTTSEngine(voice=voice, rate=rate, pitch=pitch, volume=volume, style=style)
+        elif engine_type == "AzureTTS":
             from .azureTTS import TTSEngine as AzureTTSEngine
 
             return AzureTTSEngine(

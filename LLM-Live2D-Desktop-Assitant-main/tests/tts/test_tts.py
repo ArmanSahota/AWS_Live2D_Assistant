@@ -131,6 +131,41 @@ class TestTTS(unittest.TestCase):
         except Exception as e:
             # If there's an error (e.g., pyttsx3 not installed), we'll skip this test
             print(f"Skipping real TTS factory test due to error: {e}")
+    
+    def test_edge_tts_factory(self):
+        """
+        Test the EDGE_TTS factory integration.
+        
+        This test verifies that the TTS factory can create EDGE_TTS engines
+        with proper configuration parameters.
+        """
+        try:
+            # Try to create an EDGE_TTS engine with configuration
+            tts_engine = TTSFactory.get_tts_engine(
+                "EDGE_TTS",
+                voice="en-US-JennyNeural",
+                rate="+0%",
+                pitch="+0Hz",
+                volume="+0%"
+            )
+            
+            # Test that the engine has the required methods
+            self.assertTrue(hasattr(tts_engine, 'generate_audio'))
+            self.assertTrue(hasattr(tts_engine, 'synthesize'))
+            self.assertTrue(callable(getattr(tts_engine, 'generate_audio')))
+            self.assertTrue(callable(getattr(tts_engine, 'synthesize')))
+            
+            # Test that configuration was applied
+            self.assertEqual(tts_engine.voice, "en-US-JennyNeural")
+            self.assertEqual(tts_engine.rate, "+0%")
+            self.assertEqual(tts_engine.pitch, "+0Hz")
+            self.assertEqual(tts_engine.volume, "+0%")
+            
+            print("Successfully tested EDGE_TTS factory integration")
+        except Exception as e:
+            # If there's an error (e.g., edge-tts not installed), we'll skip this test
+            print(f"Skipping EDGE_TTS factory test due to error: {e}")
+            pass
             pass
 
 

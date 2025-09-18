@@ -200,6 +200,9 @@ class WebSocketServer:
                 display_text=sentence,
                 expression_list=l2d.extract_emotion(sentence),
             )
+            # Ensure proper message type for frontend audio handler
+            payload["type"] = payload.get("type", "audio-payload")
+            payload.setdefault("format", "mp3")
             logger.info("Payload prepared")
 
             async def _send_audio():

@@ -128,7 +128,14 @@ ASR_MODEL: "Faster-Whisper"  # Options: Faster-Whisper, WhisperCPP, etc.
 
 Configure text-to-speech in `conf.yaml`:
 ```yaml
-TTS_MODEL: "edgeTTS"  # Options: edgeTTS, AzureTTS, etc.
+TTS_MODEL: EDGE_TTS
+
+EDGE_TTS:
+  voice: en-US-JennyNeural   # examples: en-US-GuyNeural, en-GB-LibbyNeural, pa-IN-NeerjaNeural
+  rate: "+0%"
+  pitch: "+0Hz"
+  volume: "+0%"
+  # style: "cheerful"        # optional, voice-dependent
 ```
 
 ## Development
