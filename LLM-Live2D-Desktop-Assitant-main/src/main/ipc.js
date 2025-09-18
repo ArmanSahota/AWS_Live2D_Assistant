@@ -255,6 +255,53 @@ function initializeIPC() {
 }
 
 /**
+ * Resolves the model3.json path for a given model
+ * @param {Object} model - The model object with name, dir, conf, and model3 properties
+ * @returns {string|null} The resolved path to the model3.json file or null if not found
+ */
+function resolveModel3Path(model) {
+  try {
+    // If model already has a model3 path, return it
+    if (model.model3 && fs.existsSync(model.model3)) {
+      return model.model3;
+    }
+    
+    // If model has a conf file, try to parse it for model3 path
+    if (model.conf && fs.existsSync(model.conf)) {
+      try {
+        const confContent = fs.readFileSync(model.conf, 'utf8');
+        // Simple YAML parsing for model3 field
+        const model3Match = confContent.match(/model3:\s*(.+)/);
+        if (model3Match) {
+          const model3RelativePath = model3Match[1].trim().replace(/['"]/g, '');
+          const model3FullPath = path.resolve(model.dir, model3RelativePath);
+          if (fs.existsSync(model3FullPath)) {
+            return model3FullPath;
+          }
+        }
+      } catch (confError) {
+        console.warn(`Failed to parse conf file for model ${model.name}:`, confError);
+      }
+    }
+    
+    // Fallback: scan directory for *.model3.json files
+    if (model.dir && fs.existsSync(model.dir)) {
+      const files = fs.readdirSync(model.dir);
+      const model3File = files.find(f => f.toLowerCase().endsWith('.model3.json'));
+      if (model3File) {
+        return path.join(model.dir, model3File);
+      }
+    }
+    
+    console.warn(`Could not resolve model3 path for model: ${model.name}`);
+    return null;
+  } catch (error) {
+    console.error(`Error resolving model3 path for model ${model.name}:`, error);
+    return null;
+  }
+}
+
+/**
  * Get the transcription history
  * @returns The transcription history
  */
@@ -286,26 +333,25 @@ async function generateSpeech(text) {
         const tempFileFixed = tempFile.replace(/\\/g, '/');
         const cwdFixed = process.cwd().replace(/\\/g, '/');
         
-        // FIX: Proper text escaping to prevent Python code injection
-        const escapedText = text
-          .replace(/\\/g, '\\\\')
-          .replace(/'/g, "\\'")
-          .replace(/"/g, '\\"')
-          .replace(/\n/g, '\\n')
-          .replace(/\r/g, '\\r')
-          .replace(/\t/g, '\\t');
+        // SECURITY FIX: Use JSON encoding to prevent Python code injection
+        const textJson = JSON.stringify(text);
+        const tempFileJson = JSON.stringify(tempFileFixed);
         
-        // Enhanced Python script with better error handling
+        // Enhanced Python script with better error handling and secure text handling
         const pythonScript = `
 import sys
 import os
+import json
 import traceback
 try:
     sys.path.append('${cwdFixed}')
     from tts.tts_factory import TTSFactory
     engine = TTSFactory.get_tts_engine("pyttsx3TTS")
+    # Use JSON to safely decode the text and file path
+    text_to_speak = json.loads(${textJson})
+    output_file = json.loads(${tempFileJson})
     # Generate audio with pyttsx3TTS
-    file_path = engine.generate_audio("${escapedText}", "${tempFileFixed}")
+    file_path = engine.generate_audio(text_to_speak, output_file)
     print(f"SUCCESS:{file_path}")
 except ImportError as e:
     print(f"IMPORT_ERROR:Failed to import TTS modules: {e}")
