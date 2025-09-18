@@ -564,9 +564,9 @@ class WebSocketServer:
                 logger.info(f"Using PORT from environment variable: {port}")
             except ValueError:
                 logger.warning(f"Invalid PORT environment variable: {env_port}, using default")
-                port = port or 1018  # Use provided port or default to 1018
+                port = port or 1020  # Use provided port or default to 1020
         else:
-            port = port or 1018  # Use provided port or default to 1018
+            port = port or 1020  # Use provided port or default to 1020
 
         # Use the new port manager for consistent port allocation
         try:
@@ -574,6 +574,15 @@ class WebSocketServer:
             actual_port = get_available_port(port)
             if actual_port != port:
                 logger.warning(f"Port {port} is in use. Using port {actual_port} instead.")
+            
+            # WEBSOCKET PORT FIX: Write actual port to a file for frontend to read
+            port_file_path = os.path.join(os.path.dirname(__file__), 'server_port.txt')
+            try:
+                with open(port_file_path, 'w') as f:
+                    f.write(str(actual_port))
+                logger.info(f"Server port {actual_port} written to {port_file_path}")
+            except Exception as e:
+                logger.warning(f"Could not write port file: {e}")
             
             # Print a clear message about the port
             print(f"\n{'=' * 60}")
@@ -808,6 +817,6 @@ if __name__ == "__main__":
     server = WebSocketServer(open_llm_vtuber_main_config=config, web=args.web)
     
     # Use port from command line if provided, otherwise use from config
-    port = args.port if args.port else config.get("PORT", 1018)
+    port = args.port if args.port else config.get("PORT", 1020)
     
     server.run(host=config.get("HOST", "0.0.0.0"), port=port)

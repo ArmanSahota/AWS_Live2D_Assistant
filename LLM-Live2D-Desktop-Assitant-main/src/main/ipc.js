@@ -282,24 +282,41 @@ async function generateSpeech(text) {
     return new Promise((resolve, reject) => {
       try {
         // Create a Python process to generate speech using pyttsx3TTS
-        // Fix Windows path escaping issue by using raw strings
+        // ENHANCED FIX: Improved Windows path handling and error handling
         const tempFileFixed = tempFile.replace(/\\/g, '/');
+        const cwdFixed = process.cwd().replace(/\\/g, '/');
         
-        // FIX: Escape text to prevent Python code injection - moved here to fix undefined error
-        const escapedText = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+        // FIX: Proper text escaping to prevent Python code injection
+        const escapedText = text
+          .replace(/\\/g, '\\\\')
+          .replace(/'/g, "\\'")
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\r')
+          .replace(/\t/g, '\\t');
         
-        const pythonProcess = spawn('python', [
-          '-c', 
-          `
+        // Enhanced Python script with better error handling
+        const pythonScript = `
 import sys
-sys.path.append('${process.cwd().replace(/\\/g, '/')}')
-from tts.tts_factory import TTSFactory
-engine = TTSFactory.get_tts_engine("pyttsx3TTS")
-# Generate audio with pyttsx3TTS
-file_path = engine.generate_audio("${escapedText}", "${tempFileFixed}")
-print(file_path)
-          `
-        ]);
+import os
+import traceback
+try:
+    sys.path.append('${cwdFixed}')
+    from tts.tts_factory import TTSFactory
+    engine = TTSFactory.get_tts_engine("pyttsx3TTS")
+    # Generate audio with pyttsx3TTS
+    file_path = engine.generate_audio("${escapedText}", "${tempFileFixed}")
+    print(f"SUCCESS:{file_path}")
+except ImportError as e:
+    print(f"IMPORT_ERROR:Failed to import TTS modules: {e}")
+    sys.exit(1)
+except Exception as e:
+    print(f"TTS_ERROR:{e}")
+    traceback.print_exc()
+    sys.exit(2)
+        `;
+        
+        const pythonProcess = spawn('python', ['-c', pythonScript]);
         
         speechCache.currentSpeechProcess = pythonProcess;
         
@@ -313,18 +330,34 @@ print(file_path)
         });
         
         pythonProcess.on('close', (code) => {
-          if (code !== 0) {
-            console.error(`TTS process exited with code ${code}`);
+          // ENHANCED ERROR HANDLING: Parse structured output from Python script
+          const output = outputData.trim();
+          
+          if (code !== 0 || output.startsWith('IMPORT_ERROR:') || output.startsWith('TTS_ERROR:')) {
+            let errorMessage = `TTS process failed with code ${code}`;
+            
+            if (output.startsWith('IMPORT_ERROR:')) {
+              errorMessage = `TTS Import Error: ${output.substring(13)}`;
+            } else if (output.startsWith('TTS_ERROR:')) {
+              errorMessage = `TTS Generation Error: ${output.substring(10)}`;
+            }
+            
+            console.error(errorMessage);
             speechCache.speechStatus = 'error';
             notifySpeechStatus('error');
-            reject(new Error(`TTS process exited with code ${code}`));
+            reject(new Error(errorMessage));
             return;
           }
           
-          // Extract the file path from the output
-          // For pyttsx3TTS, the output contains "Finished Generating" followed by the path
-          const match = outputData.match(/Finished Generating (.*\.aiff)/);
-          const filePath = match ? match[1].trim() : outputData.trim();
+          // Extract the file path from the enhanced output format
+          let filePath;
+          if (output.startsWith('SUCCESS:')) {
+            filePath = output.substring(8).trim();
+          } else {
+            // Fallback: try to extract from legacy format
+            const match = output.match(/Finished Generating (.*\.aiff)/);
+            filePath = match ? match[1].trim() : output;
+          }
           
           console.log(`TTS generated file at: ${filePath}`);
           

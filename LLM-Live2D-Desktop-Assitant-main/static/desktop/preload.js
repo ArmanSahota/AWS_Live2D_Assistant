@@ -20,6 +20,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateSensitivity: (value) => ipcRenderer.send('update-sensitivity', value),
     getClipboardContent: () => ipcRenderer.invoke('get-clipboard-content'),
     
+    // Backend port communication
+    getBackendPort: () => ipcRenderer.invoke('get-backend-port'),
+    onBackendPortDetected: (callback) => ipcRenderer.on('backend-port', (event, port) => callback(port)),
+    
     // Configuration APIs
     getConfig: () => ipcRenderer.invoke('config:get'),
     setConfig: (partial) => ipcRenderer.invoke('config:set', partial),

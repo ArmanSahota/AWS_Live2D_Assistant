@@ -7,14 +7,37 @@ window.selectedMicrophoneId = null;
 // Load the previously selected microphone device ID if available
 async function loadSelectedMicrophoneId() {
     try {
+        // ENHANCED ERROR HANDLING: Check microphone permissions first
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try {
+                // Test microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop()); // Clean up
+                console.log("[VAD] Microphone permission granted");
+            } catch (permissionError) {
+                console.error("[VAD] Microphone permission denied:", permissionError);
+                updateMicrophoneDisplay("Microphone access denied");
+                return;
+            }
+        } else {
+            console.error("[VAD] MediaDevices API not available");
+            updateMicrophoneDisplay("Audio not supported");
+            return;
+        }
+        
         const devices = await window.electronAPI.getMicrophoneDevices();
         if (devices && devices.length > 0) {
             // Use the first available device as default if none is selected
             window.selectedMicrophoneId = devices[0].id;
             updateMicrophoneDisplay(devices[0].name);
+            console.log(`[VAD] Selected microphone: ${devices[0].name}`);
+        } else {
+            console.warn("[VAD] No microphone devices found");
+            updateMicrophoneDisplay("No microphones found");
         }
     } catch (error) {
-        console.error("Error loading microphone devices:", error);
+        console.error("[VAD] Error loading microphone devices:", error);
+        updateMicrophoneDisplay("Microphone error");
     }
 }
 

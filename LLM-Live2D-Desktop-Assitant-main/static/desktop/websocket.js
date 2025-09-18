@@ -1,22 +1,95 @@
-// WebSocket connection handler with dynamic port detection
+// WebSocket connection handler with direct port from main process
 let ws = null;
 let reconnectTimer = null;
 let isReconnecting = false;
+let detectedPort = null;
 
-// Try multiple ports to find the server
-const POSSIBLE_PORTS = [1018, 1025, 1026, 1027, 1028, 1029, 1030];
-let currentPortIndex = 0;
+// WEBSOCKET PORT FIX: Get port directly from main process
+// Fallback ports if we can't get the port from the main process
+const POSSIBLE_PORTS = [1018, 1019, 1020, 1021, 1022, 1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030];
 
-async function findServerPort() {
-    for (const port of POSSIBLE_PORTS) {
+// Listen for backend port detection from main process
+if (window.electronAPI && window.electronAPI.onBackendPortDetected) {
+    window.electronAPI.onBackendPortDetected((port) => {
+        console.log(`[WEBSOCKET PORT FIX] Received backend port from main process: ${port}`);
+        detectedPort = port;
+        
+        // If we're already connected to a different port, reconnect to the correct one
+        if (ws && ws.readyState === WebSocket.OPEN && ws._port !== port) {
+            console.log(`[WEBSOCKET PORT FIX] Reconnecting to newly detected port: ${port}`);
+            ws.close();
+            connectWebSocket();
+        }
+    });
+}
+
+async function getServerPort() {
+    // SIMPLIFIED PORT DISCOVERY: More reliable and deterministic approach
+    
+    // Priority 1: Get port from main process (most reliable)
+    if (window.electronAPI && window.electronAPI.getBackendPort) {
         try {
+            const port = await Promise.race([
+                window.electronAPI.getBackendPort(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+            ]);
+            if (port && port > 0) {
+                console.log(`[WEBSOCKET SIMPLIFIED] Using port from main process: ${port}`);
+                detectedPort = port;
+                return port;
+            }
+        } catch (e) {
+            console.log(`[WEBSOCKET SIMPLIFIED] Main process port failed: ${e.message}`);
+        }
+    }
+    
+    // Priority 2: Use previously detected port
+    if (detectedPort && detectedPort > 0) {
+        console.log(`[WEBSOCKET SIMPLIFIED] Using cached port: ${detectedPort}`);
+        return detectedPort;
+    }
+    
+    // Priority 3: Quick port file check (with timeout)
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1000);
+        
+        const response = await fetch('/server_port.txt', {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+            const portText = await response.text();
+            const port = parseInt(portText.trim());
+            if (!isNaN(port) && port > 0) {
+                console.log(`[WEBSOCKET SIMPLIFIED] Found port from file: ${port}`);
+                detectedPort = port;
+                return port;
+            }
+        }
+    } catch (e) {
+        console.log(`[WEBSOCKET SIMPLIFIED] Port file check failed: ${e.message}`);
+    }
+    
+    // Priority 4: Fast port discovery (limited attempts)
+    console.log('[WEBSOCKET SIMPLIFIED] Starting fast port discovery...');
+    const quickPorts = [1018, 1019, 1020]; // Only check most common ports
+    
+    for (const port of quickPorts) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 500); // Faster timeout
+            
             const response = await fetch(`http://localhost:${port}/health`, {
                 method: 'GET',
-                timeout: 1000
-            }).catch(() => null);
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
             
-            if (response && response.ok) {
-                console.log(`Found server on port ${port}`);
+            if (response.ok) {
+                console.log(`[WEBSOCKET SIMPLIFIED] Found server on port ${port}`);
+                detectedPort = port;
                 return port;
             }
         } catch (e) {
@@ -24,23 +97,27 @@ async function findServerPort() {
         }
     }
     
-    // Default to 1029 if no port found (based on server output)
-    console.log('No server found, defaulting to port 1029');
-    return 1029;
+    // Default fallback
+    console.log('[WEBSOCKET SIMPLIFIED] Using default port 1018');
+    detectedPort = 1018;
+    return 1018;
 }
 
 async function connectWebSocket() {
     if (ws && ws.readyState === WebSocket.OPEN) {
+        console.log('[WEBSOCKET PORT FIX] WebSocket already connected');
         return;
     }
     
-    const port = await findServerPort();
+    console.log('[WEBSOCKET PORT FIX] Starting WebSocket connection process...');
+    const port = await getServerPort();
     const wsUrl = `ws://localhost:${port}/client-ws`;
     
-    console.log(`Connecting to WebSocket at ${wsUrl}`);
+    console.log(`[WEBSOCKET PORT FIX] Attempting WebSocket connection to ${wsUrl}`);
     
     try {
         ws = new WebSocket(wsUrl);
+        ws._port = port; // Store the port we're connected to
         
         ws.onopen = () => {
             console.log('WebSocket connected successfully');

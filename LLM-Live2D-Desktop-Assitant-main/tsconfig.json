@@ -24,9 +24,6 @@
     "noImplicitAny": false
   },
   "files": [
-    "src/main/models.ts",
-    "src/main/claudeClient.ts",
-    "src/main/ipc.ts",
     "src/config/appConfig.ts",
     "src/types/electron.d.ts",
     "src/types/electron-store.d.ts",

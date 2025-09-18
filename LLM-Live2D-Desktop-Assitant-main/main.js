@@ -186,6 +186,11 @@ app.whenReady().then(() => {
   console.log('Initializing IPC handlers...');
   initializeIPC();
   
+  // Add IPC handler for getting backend port
+  ipcMain.handle('get-backend-port', () => {
+    return global.backendPort || null;
+  });
+  
   if (isDevelopment) {
     console.log('Starting backend in development mode...');
     startBackend();
@@ -232,6 +237,21 @@ function startBackend() {
   backendProcess.stdout.on('data', (data) => {
     const output = data.toString();
     console.log(`[Backend] ${output.trim()}`);
+    
+    // Check for server port information in the output
+    const portMatch = output.match(/Server is running: http:\/\/[^:]+:(\d+)/);
+    if (portMatch && portMatch[1]) {
+      const serverPort = parseInt(portMatch[1]);
+      console.log(`[Backend] Detected server running on port: ${serverPort}`);
+      
+      // Store the port in global state to share with renderer process
+      global.backendPort = serverPort;
+      
+      // If window is already created, send the port to the renderer
+      if (mainWindow) {
+        mainWindow.webContents.send('backend-port', serverPort);
+      }
+    }
   });
 
   backendProcess.stderr.on('data', (data) => {
