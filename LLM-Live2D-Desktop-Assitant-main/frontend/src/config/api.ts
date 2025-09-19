@@ -9,11 +9,11 @@ export const API_CONFIG = {
   // Base URLs - Use proxy paths in development, direct URLs in production
   baseURL: isDevelopment 
     ? '/api'  // Proxy in development via Vite
-    : import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+    : import.meta.env.VITE_API_BASE_URL || 'https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev',
   
   wsURL: isDevelopment
     ? '/ws'   // Proxy in development via Vite
-    : import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000',
+    : import.meta.env.VITE_WS_BASE_URL || 'wss://sz0alheq5d.execute-api.us-west-2.amazonaws.com/dev',
     
   timeout: 10000,
   

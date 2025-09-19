@@ -36,7 +36,7 @@ function logConfig(config) {
 const store = new Store({
   name: 'config', // This will be stored in ~/.config/<app-name>/config.json
   defaults: {
-    httpBase: process.env.HTTP_BASE || process.env.VITE_HTTP_BASE || 'http://localhost:8000',
+    httpBase: process.env.HTTP_BASE || process.env.VITE_HTTP_BASE || 'https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev',
     features: {
       useLocalTTS: defBool(process.env.FEATURE_USE_LOCAL_TTS, true),
       useLocalSTT: defBool(process.env.FEATURE_USE_LOCAL_STT, true),
@@ -45,11 +45,12 @@ const store = new Store({
     },
     aws: {
       region: process.env.AWS_REGION || process.env.VITE_AWS_REGION || 'us-west-2',
-      wsUrl: process.env.WS_URL || process.env.VITE_WS_URL || 'ws://localhost:8000',
-      httpBaseUrl: process.env.HTTP_BASE || process.env.VITE_HTTP_BASE || 'http://localhost:8000',
+      wsUrl: process.env.WS_URL || process.env.VITE_WS_URL || 'wss://sz0alheq5d.execute-api.us-west-2.amazonaws.com/dev',
+      httpBaseUrl: process.env.HTTP_BASE || process.env.VITE_HTTP_BASE || 'https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev',
       cognitoUserPoolId: process.env.COGNITO_USER_POOL_ID || process.env.VITE_COGNITO_USER_POOL_ID || '',
       cognitoClientId: process.env.COGNITO_CLIENT_ID || process.env.VITE_COGNITO_CLIENT_ID || '',
       cognitoDomain: process.env.COGNITO_DOMAIN || process.env.VITE_COGNITO_DOMAIN || '',
+      modelId: process.env.MODEL_ID || process.env.VITE_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
     },
     live2d: {
       defaultModel: 'live2d-models/elaina/elaina.model3.json',
@@ -82,6 +83,7 @@ function readConfig() {
       cognitoUserPoolId: process.env.COGNITO_USER_POOL_ID || process.env.VITE_COGNITO_USER_POOL_ID || '',
       cognitoClientId: process.env.COGNITO_CLIENT_ID || process.env.VITE_COGNITO_CLIENT_ID || '',
       cognitoDomain: process.env.COGNITO_DOMAIN || process.env.VITE_COGNITO_DOMAIN || '',
+      modelId: process.env.MODEL_ID || process.env.VITE_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
     },
     live2d: {
       defaultModel: process.env.DEFAULT_MODEL || 'live2d-models/elaina/elaina.model3.json',

@@ -100,7 +100,29 @@ window.electronAPI.onToggleWakeUp((isChecked) => {
     }
 });
 
+// Add state guard to prevent IPC feedback loop
+window.micToggleInProgress = false;
+window.lastMicToggleTime = 0;
+const MIC_TOGGLE_DEBOUNCE_MS = 500; // 500ms debounce
+
 window.electronAPI.onToggleMicrophone((isChecked) => {
+    const now = Date.now();
+    
+    // Prevent rapid cycling with debounce
+    if (now - window.lastMicToggleTime < MIC_TOGGLE_DEBOUNCE_MS) {
+        console.log('[MIC LOOP FIX] Debouncing microphone toggle, ignoring rapid call');
+        return;
+    }
+    
+    // Prevent feedback loop during programmatic updates
+    if (window.micToggleInProgress) {
+        console.log('[MIC LOOP FIX] Microphone toggle in progress, ignoring IPC event');
+        return;
+    }
+    
+    console.log(`[MIC LOOP FIX] User-initiated microphone toggle: ${isChecked}`);
+    window.lastMicToggleTime = now;
+    
     if (isChecked) {
         window.start_mic();
     } else {

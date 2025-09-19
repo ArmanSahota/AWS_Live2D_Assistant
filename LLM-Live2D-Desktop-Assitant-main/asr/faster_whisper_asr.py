@@ -131,3 +131,15 @@ class VoiceRecognition(ASRInterface):
             import traceback
             traceback.print_exc()
             return ""
+
+    def transcribe(self, audio_data):
+        """
+        Transcribe audio data using Faster Whisper.
+        
+        Args:
+            audio_data (np.ndarray): Audio data as numpy array
+            
+        Returns:
+            str: Transcribed text
+        """
+        return self.transcribe_np(audio_data)

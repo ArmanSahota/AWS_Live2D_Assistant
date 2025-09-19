@@ -111,7 +111,29 @@ async function init_vad() {
         onSpeechEnd: (audio) => {
             console.log('[STT DEBUG] Speech ended, audio length:', audio ? audio.length : 0);
             window.audioTaskQueue.clearQueue();
+            
+            // MIC LOOP FIX: Add circuit breaker to prevent rapid cycling
+            const now = Date.now();
+            if (!window.lastSpeechEndTime) window.lastSpeechEndTime = 0;
+            if (!window.speechEndCount) window.speechEndCount = 0;
+            
+            // Reset counter if enough time has passed
+            if (now - window.lastSpeechEndTime > 5000) {
+                window.speechEndCount = 0;
+            }
+            
+            window.speechEndCount++;
+            window.lastSpeechEndTime = now;
+            
+            // Circuit breaker: if too many speech end events in short time, don't stop mic
+            if (window.speechEndCount > 3) {
+                console.warn('[MIC LOOP FIX] Circuit breaker activated - too many speech end events, not stopping mic');
+                resetNoSpeechTimeout();
+                return;
+            }
+            
             if (!window.voiceInterruptionOn) {
+                console.log('[MIC LOOP FIX] Stopping mic due to speech end (count:', window.speechEndCount, ')');
                 window.stop_mic();
             }
             if (window.ws && window.ws.readyState === WebSocket.OPEN) {
@@ -143,13 +165,24 @@ async function start_mic() {
             await init_vad();
         }
         await window.myvad.start();
+        
+        // Set flag to prevent IPC feedback loop
+        window.micToggleInProgress = true;
         window.electronAPI.updateMenuChecked("Microphone", true);
         window.micToggleState = true;
+        // Clear flag after a short delay
+        setTimeout(() => { window.micToggleInProgress = false; }, 100);
+        
         resetNoSpeechTimeout();
     } catch (error) {
         console.error("Failed to start microphone:", error);
         window.micToggleState = false;
+        
+        // Set flag to prevent IPC feedback loop
+        window.micToggleInProgress = true;
         window.electronAPI.updateMenuChecked("Microphone", false);
+        // Clear flag after a short delay
+        setTimeout(() => { window.micToggleInProgress = false; }, 100);
     }
 }
 
@@ -161,7 +194,13 @@ async function stop_mic() {
     if (window.myvad) {
         window.myvad.pause();
     }
+    
+    // Set flag to prevent IPC feedback loop
+    window.micToggleInProgress = true;
     window.electronAPI.updateMenuChecked("Microphone", false);
+    // Clear flag after a short delay
+    setTimeout(() => { window.micToggleInProgress = false; }, 100);
+    
     clearNoSpeechTimeout();
     window.micToggleState = false;
     if (window.wakeWordDetectionOn)

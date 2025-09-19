@@ -64,8 +64,11 @@ class EdgeTTSEngine:
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                # If already running (e.g. called from async context), run fresh
-                return asyncio.run(self._async_synthesize_to_file(text))
+                # If already running, create a task instead of new event loop
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self._async_synthesize_to_file(text))
+                    return future.result()
         except RuntimeError:
             pass
         return asyncio.run(self._async_synthesize_to_file(text))

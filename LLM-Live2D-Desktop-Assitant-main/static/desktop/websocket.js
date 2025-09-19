@@ -213,9 +213,43 @@ function handleWebSocketMessage(data) {
             break;
             
         case 'control':
-            // Handle control messages
+            // Handle control messages with state checking and rate limiting
             if (data.text === 'start-mic') {
                 console.log('[STT DEBUG] Received start-mic command from server');
+                
+                // Initialize rate limiting variables if not exists
+                if (!window.lastMicStartCommand) {
+                    window.lastMicStartCommand = 0;
+                    window.micStartCommandCount = 0;
+                }
+                
+                const now = Date.now();
+                const timeSinceLastCommand = now - window.lastMicStartCommand;
+                
+                // Rate limiting: ignore if less than 2 seconds since last command
+                if (timeSinceLastCommand < 2000) {
+                    console.log('[STT DEBUG] Ignoring start-mic command - rate limited (last command ' + timeSinceLastCommand + 'ms ago)');
+                    return;
+                }
+                
+                // State checking: don't start if already active
+                if (window.micToggleState === true) {
+                    console.log('[STT DEBUG] Ignoring start-mic command - microphone already active');
+                    return;
+                }
+                
+                // Check if VAD is already running
+                if (window.myvad && window.myvad.listening) {
+                    console.log('[STT DEBUG] Ignoring start-mic command - VAD already listening');
+                    return;
+                }
+                
+                // Update rate limiting tracking
+                window.lastMicStartCommand = now;
+                window.micStartCommandCount++;
+                
+                console.log('[STT DEBUG] Processing start-mic command (count: ' + window.micStartCommandCount + ')');
+                
                 if (window.start_mic) {
                     console.log('[STT DEBUG] Calling start_mic function');
                     window.start_mic();

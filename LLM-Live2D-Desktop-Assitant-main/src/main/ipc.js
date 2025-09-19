@@ -343,15 +343,29 @@ import sys
 import os
 import json
 import traceback
+import asyncio
 try:
     sys.path.append('${cwdFixed}')
     from tts.tts_factory import TTSFactory
-    engine = TTSFactory.get_tts_engine("pyttsx3TTS")
+    
+    # Use EDGE_TTS engine to match configuration
+    engine = TTSFactory.get_tts_engine("EDGE_TTS",
+        voice="en-US-JennyNeural",
+        rate="+0%",
+        pitch="+0Hz",
+        volume="+0%")
+    
     # Use JSON to safely decode the text and file path
     text_to_speak = json.loads(${textJson})
     output_file = json.loads(${tempFileJson})
-    # Generate audio with pyttsx3TTS
-    file_path = engine.generate_audio(text_to_speak, output_file)
+    
+    # Generate audio with EDGE_TTS (synchronous call)
+    result = engine.synthesize(text_to_speak)
+    if isinstance(result, tuple):
+        file_path, duration = result
+    else:
+        file_path = result
+    
     print(f"SUCCESS:{file_path}")
 except ImportError as e:
     print(f"IMPORT_ERROR:Failed to import TTS modules: {e}")

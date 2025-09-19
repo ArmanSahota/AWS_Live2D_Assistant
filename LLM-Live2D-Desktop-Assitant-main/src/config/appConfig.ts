@@ -26,6 +26,7 @@ export interface AWSConfig {
   cognitoUserPoolId: string;
   cognitoClientId: string;
   cognitoDomain: string;
+  modelId: string;
 }
 
 // Define the application configuration interface
@@ -39,7 +40,7 @@ export interface AppConfig {
 const store = new Store({
   name: 'config', // This will be stored in ~/.config/<app-name>/config.json
   defaults: {
-    httpBase: process.env.VITE_HTTP_BASE || '',
+    httpBase: process.env.VITE_HTTP_BASE || 'https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev',
     features: {
       useLocalTTS: true,
       useLocalSTT: true,
@@ -47,12 +48,13 @@ const store = new Store({
     },
     aws: {
       region: process.env.VITE_AWS_REGION || 'us-west-2',
-      wsUrl: process.env.VITE_WS_URL || '',
-      httpBase: process.env.VITE_HTTP_BASE || '',
-      httpBaseUrl: process.env.VITE_HTTP_BASE || '',
+      wsUrl: process.env.VITE_WS_URL || 'wss://sz0alheq5d.execute-api.us-west-2.amazonaws.com/dev',
+      httpBase: process.env.VITE_HTTP_BASE || 'https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev',
+      httpBaseUrl: process.env.VITE_HTTP_BASE || 'https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev',
       cognitoUserPoolId: process.env.VITE_COGNITO_USER_POOL_ID || '',
       cognitoClientId: process.env.VITE_COGNITO_CLIENT_ID || '',
       cognitoDomain: process.env.VITE_COGNITO_DOMAIN || '',
+      modelId: process.env.VITE_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
     }
   }
 });
@@ -64,7 +66,7 @@ const store = new Store({
 export function readConfig(): AppConfig {
   // Get the environment variables
   const envConfig: AppConfig = {
-    httpBase: process.env.VITE_HTTP_BASE || '',
+    httpBase: process.env.VITE_HTTP_BASE || 'https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev',
     features: {
       useLocalTTS: process.env.VITE_FEATURE_USE_LOCAL_TTS === 'true' || true,
       useLocalSTT: process.env.VITE_FEATURE_USE_LOCAL_STT === 'true' || true,
@@ -72,12 +74,13 @@ export function readConfig(): AppConfig {
     },
     aws: {
       region: process.env.VITE_AWS_REGION || 'us-west-2',
-      wsUrl: process.env.VITE_WS_URL || '',
-      httpBase: process.env.VITE_HTTP_BASE || '',
-      httpBaseUrl: process.env.VITE_HTTP_BASE || '',
+      wsUrl: process.env.VITE_WS_URL || 'wss://sz0alheq5d.execute-api.us-west-2.amazonaws.com/dev',
+      httpBase: process.env.VITE_HTTP_BASE || 'https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev',
+      httpBaseUrl: process.env.VITE_HTTP_BASE || 'https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev',
       cognitoUserPoolId: process.env.VITE_COGNITO_USER_POOL_ID || '',
       cognitoClientId: process.env.VITE_COGNITO_CLIENT_ID || '',
       cognitoDomain: process.env.VITE_COGNITO_DOMAIN || '',
+      modelId: process.env.VITE_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
     }
   };
 
