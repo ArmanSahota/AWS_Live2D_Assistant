@@ -36,7 +36,7 @@ function logConfig(config) {
 const store = new Store({
   name: 'config', // This will be stored in ~/.config/<app-name>/config.json
   defaults: {
-    httpBase: process.env.HTTP_BASE || process.env.VITE_HTTP_BASE || '',
+    httpBase: process.env.HTTP_BASE || process.env.VITE_HTTP_BASE || 'http://localhost:8000',
     features: {
       useLocalTTS: defBool(process.env.FEATURE_USE_LOCAL_TTS, true),
       useLocalSTT: defBool(process.env.FEATURE_USE_LOCAL_STT, true),
@@ -45,8 +45,8 @@ const store = new Store({
     },
     aws: {
       region: process.env.AWS_REGION || process.env.VITE_AWS_REGION || 'us-west-2',
-      wsUrl: process.env.WS_URL || process.env.VITE_WS_URL || '',
-      httpBaseUrl: process.env.HTTP_BASE || process.env.VITE_HTTP_BASE || '',
+      wsUrl: process.env.WS_URL || process.env.VITE_WS_URL || 'ws://localhost:8000',
+      httpBaseUrl: process.env.HTTP_BASE || process.env.VITE_HTTP_BASE || 'http://localhost:8000',
       cognitoUserPoolId: process.env.COGNITO_USER_POOL_ID || process.env.VITE_COGNITO_USER_POOL_ID || '',
       cognitoClientId: process.env.COGNITO_CLIENT_ID || process.env.VITE_COGNITO_CLIENT_ID || '',
       cognitoDomain: process.env.COGNITO_DOMAIN || process.env.VITE_COGNITO_DOMAIN || '',

@@ -5,16 +5,19 @@ import atexit
 import json
 import asyncio
 import socket
+import signal
+import sys
 from typing import List, Dict, Any
 import yaml
 import numpy as np
 import chardet
 from loguru import logger
-from fastapi import FastAPI, WebSocket, APIRouter
+from fastapi import FastAPI, WebSocket, APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketDisconnect
+from pydantic import BaseModel
 from module.openllm_vtuber_main import OpenLLMVTuberMain
 from module.live2d_model import Live2dModel
 from tts.stream_audio import AudioPayloadPreparer
@@ -79,15 +82,21 @@ class WebSocketServer:
         self.connected_clients: List[WebSocket] = []
         self.open_llm_vtuber_main_config = open_llm_vtuber_main_config
 
-        # Add CORS middleware
+        # Add CORS middleware - Updated for Vite development
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
+            allow_origins=[
+                "http://localhost:5173",  # Vite dev server
+                "http://localhost:3000",  # Alternative dev port
+                "http://127.0.0.1:5173", # Alternative localhost
+                "http://127.0.0.1:3000", # Alternative localhost
+                "*"  # Allow all for development (remove in production)
+            ],
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
         )
-        logger.info("CORS middleware enabled for all origins")
+        logger.info("CORS middleware enabled for Vite development (localhost:5173)")
 
         # Initialize model manager  
         self.preload_models = self.open_llm_vtuber_main_config.get("SERVER", {}).get(
@@ -223,10 +232,130 @@ class WebSocketServer:
     def _setup_routes(self):
         """Sets up the WebSocket and broadcast routes."""
 
-        # Health check endpoint
+        # Health check endpoint - Enhanced for Vite proxy
         @self.app.get("/health")
         async def health_check():
-            return {"status": "ok", "message": "Server is running"}
+            return {
+                "status": "ok",
+                "message": "Server is running",
+                "port": get_current_port() or 8000,
+                "timestamp": asyncio.get_event_loop().time(),
+                "version": "1.0.0"
+            }
+
+        # Mock TTS endpoint for development
+        class TTSRequest(BaseModel):
+            text: str
+            voice: str = "en-US-JennyNeural"
+            rate: str = "+0%"
+            pitch: str = "+0Hz"
+
+        @self.app.post("/api/tts/mock")
+        async def mock_tts_endpoint(request: TTSRequest):
+            """Mock TTS endpoint for frontend development"""
+            logger.info(f"Mock TTS request: {request.text[:50]}...")
+            return {
+                "status": "success",
+                "message": "Mock TTS generated",
+                "text": request.text,
+                "voice": request.voice,
+                "audio_length": len(request.text) * 0.1,  # Mock duration
+                "base64": "mock_audio_data_base64_encoded_string"
+            }
+
+        # Mock STT endpoint for development
+        class STTRequest(BaseModel):
+            audio: str  # Base64 encoded audio
+            language: str = "en"
+
+        @self.app.post("/api/stt/mock")
+        async def mock_stt_endpoint(request: STTRequest):
+            """Mock STT endpoint for frontend development"""
+            logger.info(f"Mock STT request: {len(request.audio)} bytes")
+            return {
+                "status": "success",
+                "message": "Mock STT processed",
+                "transcription": "This is a mock transcription of your audio input",
+                "confidence": 0.95,
+                "language": request.language
+            }
+
+        # Claude API endpoint for Electron app compatibility
+        class ClaudeRequest(BaseModel):
+            text: str
+            max_tokens: int = 500
+
+        @self.app.post("/claude")
+        async def claude_endpoint(request: ClaudeRequest):
+            """Claude API endpoint - Proxy to AWS Claude API"""
+            logger.info(f"Claude request: {request.text[:50]}...")
+            
+            try:
+                # Use the existing OpenLLMVTuberMain to handle Claude requests
+                # This ensures we use the same Claude configuration as the WebSocket interface
+                if hasattr(self, 'open_llm_vtuber_main_config'):
+                    claude_config = self.open_llm_vtuber_main_config.get('claude', {})
+                    base_url = claude_config.get('BASE_URL')
+                    model = claude_config.get('MODEL')
+                    
+                    if base_url and model:
+                        # For now, return a mock response that matches the expected format
+                        # TODO: Implement actual AWS Claude API call
+                        return {
+                            "reply": f"Mock Claude response to: {request.text}. (AWS endpoint: {base_url}, Model: {model})",
+                            "status": "success",
+                            "tokens_used": len(request.text.split()) * 2
+                        }
+                
+                # Fallback mock response
+                return {
+                    "reply": f"Mock Claude response to: {request.text}",
+                    "status": "success",
+                    "tokens_used": len(request.text.split()) * 2
+                }
+                
+            except Exception as e:
+                logger.error(f"Claude endpoint error: {e}")
+                return {
+                    "reply": f"Error processing request: {str(e)}",
+                    "status": "error",
+                    "tokens_used": 0
+                }
+
+        # WebSocket echo endpoint for testing
+        @self.app.websocket("/ws/echo")
+        async def websocket_echo(websocket: WebSocket):
+            """WebSocket echo endpoint for connection testing"""
+            await websocket.accept()
+            logger.info("WebSocket echo client connected")
+            
+            try:
+                while True:
+                    data = await websocket.receive_text()
+                    logger.info(f"Echo received: {data[:100]}...")
+                    
+                    # Parse and echo back with timestamp
+                    try:
+                        parsed_data = json.loads(data)
+                        echo_response = {
+                            "type": "echo",
+                            "original": parsed_data,
+                            "timestamp": asyncio.get_event_loop().time(),
+                            "message": "Echo from server"
+                        }
+                        await websocket.send_text(json.dumps(echo_response))
+                    except json.JSONDecodeError:
+                        # If not JSON, echo as plain text
+                        echo_response = {
+                            "type": "echo",
+                            "original": data,
+                            "timestamp": asyncio.get_event_loop().time(),
+                            "message": "Echo from server (plain text)"
+                        }
+                        await websocket.send_text(json.dumps(echo_response))
+                        
+            except WebSocketDisconnect:
+                logger.info("WebSocket echo client disconnected")
 
         # the connection between this server and the frontend client
         # The version 2 of the client-ws. Introduces breaking changes.
@@ -816,7 +945,17 @@ if __name__ == "__main__":
     # Initialize and run the WebSocket server
     server = WebSocketServer(open_llm_vtuber_main_config=config, web=args.web)
     
-    # Use port from command line if provided, otherwise use from config
-    port = args.port if args.port else config.get("PORT", 1020)
+    # Use port from command line if provided, otherwise use SERVER_PORT from config, default to 8000
+    port = args.port if args.port else config.get("SERVER_PORT", config.get("PORT", 8000))
     
+    # Add graceful shutdown handlers
+    def signal_handler(signum, frame):
+        logger.info(f"Received signal {signum}, gracefully shutting down server...")
+        cleanup_ports()
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    logger.info(f"Starting server with configuration: HOST={config.get('HOST', '0.0.0.0')}, PORT={port}")
     server.run(host=config.get("HOST", "0.0.0.0"), port=port)

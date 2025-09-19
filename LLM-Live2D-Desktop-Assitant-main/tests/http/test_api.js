@@ -55,7 +55,7 @@ async function runTests() {
 async function testApiClientCreation() {
   // Create an API client
   const apiClient = createApiClient({
-    baseUrl: 'http://localhost:8000',
+    baseUrl: 'http://localhost:8000',  // Keep 8000 as standard
     timeout: 5000
   });
   

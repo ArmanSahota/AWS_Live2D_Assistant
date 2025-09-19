@@ -108,8 +108,20 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadFile(path.join(basePath, 'static', 'desktop.html'));
-  // mainWindow.webContents.openDevTools();
+  // TEMPORARY: Load original static HTML while debugging React compilation
+  // TODO: Switch back to React app once frontend compilation is fixed
+  if (isDevelopment) {
+    // Temporary: Load original static HTML for testing
+    console.log('TEMPORARY: Loading original static HTML while debugging React compilation');
+    mainWindow.loadFile(path.join(basePath, 'static', 'desktop.html'));
+    // Enable DevTools in development
+    mainWindow.webContents.openDevTools();
+  } else {
+    // Production: Load from built React app
+    const reactAppPath = path.join(basePath, 'dist-frontend', 'index.html');
+    console.log('Loading React app from built files:', reactAppPath);
+    mainWindow.loadFile(reactAppPath);
+  }
 
   if (isMac) mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 

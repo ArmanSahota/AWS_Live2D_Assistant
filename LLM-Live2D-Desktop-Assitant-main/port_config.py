@@ -13,9 +13,9 @@ from loguru import logger
 class PortManager:
     """Centralized port management for consistent port allocation and cleanup."""
     
-    # Default port configuration
-    DEFAULT_BASE_PORT = 1018
-    DEFAULT_PORT_RANGE = 10  # Will try ports 1018-1027
+    # Default port configuration - Updated for Vite proxy compatibility
+    DEFAULT_BASE_PORT = 8000
+    DEFAULT_PORT_RANGE = 10  # Will try ports 8000-8009
     
     def __init__(self):
         self.allocated_ports = set()

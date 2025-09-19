@@ -10,7 +10,7 @@
  * @returns {Object} - API client
  */
 function createApiClient(options = {}) {
-  const baseUrl = options.baseUrl || 'http://localhost:8000';
+  const baseUrl = options.baseUrl || 'http://localhost:8000';  // Keep 8000 as standard
   const timeout = options.timeout || 5000;
   
   return {
