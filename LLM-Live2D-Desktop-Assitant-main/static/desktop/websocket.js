@@ -74,7 +74,7 @@ async function getServerPort() {
     
     // Priority 4: Fast port discovery (limited attempts)
     console.log('[WEBSOCKET SIMPLIFIED] Starting fast port discovery...');
-    const quickPorts = [1018, 1019, 1020]; // Only check most common ports
+    const quickPorts = [8002, 1018, 1019, 1020]; // Check port 8002 first (current server port)
     
     for (const port of quickPorts) {
         try {
@@ -209,6 +209,33 @@ function handleWebSocketMessage(data) {
             // Play audio response
             if (window.playAudioResponse) {
                 window.playAudioResponse(data);
+            }
+            break;
+            
+        case 'audio-payload':
+            // Handle audio payload from backend (EdgeTTS)
+            console.log('[AUDIO DEBUG] Received audio-payload message');
+            console.log('[AUDIO DEBUG] Payload contains:', {
+                hasAudio: !!data.audio,
+                hasVolumes: !!data.volumes,
+                hasText: !!data.text,
+                hasExpression: !!data.expression_list,
+                format: data.format
+            });
+            
+            // Call the audio task handler
+            if (window.addAudioTask && data.audio) {
+                console.log('[AUDIO DEBUG] Adding audio task with text:', data.text);
+                window.addAudioTask(
+                    data.audio,
+                    data.instrument || "None",
+                    data.volumes || [],
+                    data.slice_length || 0.1,
+                    data.text || null,
+                    data.expression_list || null
+                );
+            } else {
+                console.error('[AUDIO DEBUG] Missing addAudioTask function or audio data');
             }
             break;
             

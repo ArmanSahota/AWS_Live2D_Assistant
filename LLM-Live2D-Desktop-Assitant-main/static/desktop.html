@@ -13,68 +13,21 @@
     <script src="libs/porcupine-web.js"></script>
     <script src="libs/web-voice-processor.js"></script>
     <script src="desktop/porcupine_params.js"></script>
-    <!-- Optional wake word script - will be loaded dynamically if available -->
+    <!-- New wake word module -->
+    <script src="desktop/wake-word.js"></script>
     <script>
-        // Enhanced wake word script loader that checks file existence and provides fallbacks
-        (function() {
-            // Define possible wake word file paths (English first, then Chinese fallback)
-            const wakeWordPaths = [
-                "desktop/Elaina_en_wasm_v3_0_0.js",
-                "desktop/伊蕾娜_zh_wasm_v3_0_0.js"
-            ];
-            
-            // Function to try loading wake word files
-            async function loadWakeWordFile() {
-                for (const filePath of wakeWordPaths) {
-                    try {
-                        const response = await fetch(filePath);
-                        if (response.ok) {
-                            console.log(`[WAKE WORD FIX] Loading wake word file: ${filePath}`);
-                            const script = document.createElement('script');
-                            script.src = filePath;
-                            script.onload = () => console.log(`[WAKE WORD FIX] Successfully loaded: ${filePath}`);
-                            script.onerror = () => console.warn(`[WAKE WORD FIX] Failed to execute: ${filePath}`);
-                            document.head.appendChild(script);
-                            return; // Exit after first successful load
-                        }
-                    } catch (error) {
-                        console.warn(`[WAKE WORD FIX] Could not fetch ${filePath}:`, error.message);
-                    }
-                }
-                console.warn('[WAKE WORD FIX] No wake word files found. Wake word detection will be disabled.');
+        // Initialize wake word detection with auto-start
+        window.autoInitWakeWord = true;
+        window.autoStartWakeWord = false; // Will be controlled by user settings
+        
+        // Handle wake word detection events
+        window.onWakeWordDetected = function(detection) {
+            console.log('Wake word detected:', detection.label);
+            // Trigger the existing VAD system
+            if (window.start_recording) {
+                window.start_recording();
             }
-            
-            // Try to load wake word files
-            loadWakeWordFile();
-        })();
-    </script>
-    
-    <!-- Fallback script loading with error handling -->
-    <script>
-        // Original wake word loading with error handling
-        (function() {
-            fetch("desktop/Elaina_en_wasm_v3_0_0.js")
-                .then(response => {
-                    if (response.ok) {
-                        // File exists, load it
-                        const script = document.createElement('script');
-                        script.src = englishWakeWordPath;
-                        document.head.appendChild(script);
-                        console.log("English wake word script loaded successfully");
-                    } else {
-                        throw new Error("English wake word script not found");
-                    }
-                })
-                .catch(error => {
-                    console.warn("English wake word file not found, using Chinese wake word only:", error);
-                    
-                    // Set a flag to indicate English wake word is not available
-                    window.englishWakeWordAvailable = false;
-                });
-            
-            // Always set the flag to true initially, will be set to false if fetch fails
-            window.englishWakeWordAvailable = true;
-        })();
+        };
     </script>
 
     <!-- 引入样式 -->

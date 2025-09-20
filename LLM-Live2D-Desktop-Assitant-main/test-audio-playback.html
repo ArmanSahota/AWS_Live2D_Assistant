@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Playback Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background: #333;
+        }
+        .success { background: #2d5a2d; }
+        .error { background: #5a2d2d; }
+        .info { background: #2d3a5a; }
+        #message {
+            padding: 15px;
+            background: #444;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-size: 18px;
+            min-height: 50px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Audio Playback & Subtitle Test</h1>
+    
+    <div id="status" class="status">Waiting for connection...</div>
+    
+    <div id="message">Subtitles will appear here</div>
+    
+    <div>
+        <button onclick="testConnection()">Test Connection</button>
+        <button onclick="sendTestMessage()">Send Test Message</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+    
+    <div id="logs" style="margin-top: 20px; padding: 10px; background: #222; border-radius: 5px; max-height: 400px; overflow-y: auto;">
+        <h3>Debug Logs:</h3>
+    </div>
+
+    <script>
+        let ws = null;
+        
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const time = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#ff6b6b' : type === 'success' ? '#51cf66' : '#74c0fc';
+            logs.innerHTML += `<div style="color: ${color}">[${time}] ${message}</div>`;
+            logs.scrollTop = logs.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+        
+        function connectWebSocket() {
+            const wsUrl = 'ws://localhost:8000/client-ws';
+            log(`Connecting to ${wsUrl}...`);
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    updateStatus('Connected to WebSocket', 'success');
+                    log('WebSocket connection established', 'success');
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`Received message type: ${data.type}`);
+                        
+                        switch(data.type) {
+                            case 'audio-payload':
+                                log('Audio payload received!', 'success');
+                                handleAudioPayload(data);
+                                break;
+                            case 'full-text':
+                                log(`Full text received: ${data.text}`, 'success');
+                                updateSubtitles(data.text);
+                                break;
+                            case 'control':
+                                log(`Control message: ${data.text}`);
+                                break;
+                            default:
+                                log(`Unknown message type: ${data.type}`);
+                        }
+                    } catch (error) {
+                        log(`Error parsing message: ${error.message}`, 'error');
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    updateStatus('WebSocket error', 'error');
+                    log(`WebSocket error: ${error}`, 'error');
+                };
+                
+                ws.onclose = () => {
+                    updateStatus('Disconnected from WebSocket', 'error');
+                    log('WebSocket connection closed');
+                    // Attempt reconnect after 3 seconds
+                    setTimeout(connectWebSocket, 3000);
+                };
+                
+            } catch (error) {
+                log(`Failed to connect: ${error.message}`, 'error');
+                setTimeout(connectWebSocket, 5000);
+            }
+        }
+        
+        function handleAudioPayload(data) {
+            log('Processing audio payload...');
+            
+            // Check what's in the payload
+            const hasAudio = !!data.audio;
+            const hasText = !!data.text;
+            const hasVolumes = !!data.volumes;
+            const hasExpression = !!data.expression_list;
+            
+            log(`Payload contains: audio=${hasAudio}, text=${hasText}, volumes=${hasVolumes}, expression=${hasExpression}`);
+            
+            if (data.text) {
+                updateSubtitles(data.text);
+            }
+            
+            if (data.audio) {
+                playAudio(data.audio, data.format || 'mp3');
+            }
+        }
+        
+        function updateSubtitles(text) {
+            const messageElement = document.getElementById('message');
+            messageElement.textContent = text;
+            log(`Subtitles updated: "${text}"`, 'success');
+        }
+        
+        function playAudio(audioBase64, format) {
+            try {
+                const audio = new Audio(`data:audio/${format};base64,${audioBase64}`);
+                
+                audio.onloadeddata = () => {
+                    log(`Audio loaded, duration: ${audio.duration.toFixed(2)}s`, 'success');
+                };
+                
+                audio.onplay = () => {
+                    log('Audio playback started', 'success');
+                };
+                
+                audio.onended = () => {
+                    log('Audio playback ended', 'success');
+                };
+                
+                audio.onerror = (e) => {
+                    log(`Audio playback error: ${e}`, 'error');
+                };
+                
+                audio.play().catch(error => {
+                    log(`Failed to play audio: ${error.message}`, 'error');
+                });
+                
+            } catch (error) {
+                log(`Error creating audio: ${error.message}`, 'error');
+            }
+        }
+        
+        function testConnection() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('Connection is active', 'success');
+            } else {
+                log('Connection is not active, attempting to reconnect...', 'error');
+                connectWebSocket();
+            }
+        }
+        
+        function sendTestMessage() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const testMessage = {
+                    type: 'text-input',
+                    text: 'Hello, this is a test message!'
+                };
+                ws.send(JSON.stringify(testMessage));
+                log('Test message sent', 'success');
+            } else {
+                log('Cannot send message - WebSocket not connected', 'error');
+            }
+        }
+        
+        function clearLogs() {
+            const logs = document.getElementById('logs');
+            logs.innerHTML = '<h3>Debug Logs:</h3>';
+            log('Logs cleared');
+        }
+        
+        // Start connection when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            log('Page loaded, initializing WebSocket connection...');
+            connectWebSocket();
+        });
+    </script>
+</body>
+</html>

@@ -51,24 +51,41 @@ class AudioPayloadPreparer:
         if not audio_path:
             raise ValueError("audio_path cannot be None or empty.")
 
-        audio = AudioSegment.from_file(audio_path)
-        audio_bytes = audio.export(format="wav").read()
+        # Read the original file and determine format
+        import os
+        file_ext = os.path.splitext(audio_path)[1].lower()
+        
+        # For MP3 files, keep them as MP3; for others, convert to WAV
+        if file_ext == '.mp3':
+            # Read MP3 file directly as bytes
+            with open(audio_path, 'rb') as f:
+                audio_bytes = f.read()
+            audio = AudioSegment.from_file(audio_path)
+            audio_format = "mp3"
+        else:
+            # Convert to WAV for other formats
+            audio = AudioSegment.from_file(audio_path)
+            audio_bytes = audio.export(format="wav").read()
+            audio_format = "wav"
+            
         instrument_base64 = None
         if instrument_path:
             instrument = AudioSegment.from_file(instrument_path)
             instrument_bytes = instrument.export(format="wav").read()
             instrument_base64 = base64.b64encode(instrument_bytes).decode("utf-8")
+            
         audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
         volumes = self.__get_volume_by_chunks(audio)
 
         payload = {
-            "type": "audio",
+            "type": "audio-payload",  # Changed to match frontend expectation
             "audio": audio_base64,
             "instrument": instrument_base64,
             "volumes": volumes,
-            "slice_length": self.chunk_length_ms,
+            "slice_length": self.chunk_length_ms / 1000.0,  # Convert to seconds for frontend
             "text": display_text,
-            "expressions": expression_list,
+            "expression_list": expression_list,  # Changed from "expressions" to match frontend
+            "format": audio_format  # Add format information
         }
 
         return payload, audio.duration_seconds

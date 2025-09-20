@@ -1,0 +1,25 @@
+{
+  "wakeWords": {
+    "chinese": {
+      "enabled": true,
+      "file": "伊蕾娜_zh_wasm_v3_0_0.ppn",
+      "label": "伊蕾娜",
+      "language": "zh",
+      "paramsFile": "porcupine_params_zh.pv"
+    },
+    "english": {
+      "enabled": false,
+      "file": "Elaina_en_wasm_v3_0_0.ppn",
+      "label": "Elaina",
+      "language": "en",
+      "paramsFile": "porcupine_params.pv",
+      "fallbackWords": [
+        "Computer",
+        "Jarvis",
+        "Hey Assistant"
+      ]
+    }
+  },
+  "accessKey": "/7gDUCElrddYzUegKQSEoe/ZQjH+sKU1KjcEnANpHdYQeLhc1WXrHQ==",
+  "sensitivity": 0.5
+}

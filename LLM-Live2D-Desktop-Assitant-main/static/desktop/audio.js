@@ -125,25 +125,39 @@ function playAudioLipSync(audio_base64, instrument_base64, volumes, slice_length
     
     // Enhanced fallback audio playback with format detection
     const playFallbackAudio = () => {
-        console.log("Using enhanced fallback audio playback");
+        console.log("[AUDIO DEBUG] Using enhanced fallback audio playback");
+        console.log("[AUDIO DEBUG] Audio base64 length:", audio_base64 ? audio_base64.length : 0);
         
-        // Try different audio formats
+        // Try different audio formats - MP3 first since backend sends MP3
         const tryPlayAudio = (format) => {
             return new Promise((resolve, reject) => {
+                console.log(`[AUDIO DEBUG] Trying ${format} format...`);
                 const audio = new Audio(`data:audio/${format};base64,` + audio_base64);
                 
                 audio.onended = () => {
-                    console.log(`${format} audio playback complete`);
+                    console.log(`[AUDIO DEBUG] ${format} audio playback complete`);
+                    if (messageElement) {
+                        // Clear subtitle after audio ends
+                        setTimeout(() => {
+                            messageElement.textContent = "";
+                        }, 500);
+                    }
                     resolve(true);
                 };
                 
                 audio.onerror = (error) => {
-                    console.log(`${format} audio format failed:`, error);
+                    console.log(`[AUDIO DEBUG] ${format} audio format failed:`, error);
                     reject(error);
                 };
                 
-                audio.play().catch(error => {
-                    console.log(`${format} audio play error:`, error);
+                audio.oncanplaythrough = () => {
+                    console.log(`[AUDIO DEBUG] ${format} audio ready to play`);
+                };
+                
+                audio.play().then(() => {
+                    console.log(`[AUDIO DEBUG] ${format} audio started playing successfully`);
+                }).catch(error => {
+                    console.log(`[AUDIO DEBUG] ${format} audio play error:`, error);
                     reject(error);
                 });
             });
@@ -227,3 +241,34 @@ function playAudioLipSync(audio_base64, instrument_base64, volumes, slice_length
     }
 }
 window.playAudioLipSync = playAudioLipSync;
+
+// Add the missing playAudioResponse function for WebSocket integration
+window.playAudioResponse = function(data) {
+    console.log('[AUDIO] playAudioResponse called with data type:', data.type);
+    
+    if (data.type === 'audio-data') {
+        // Extract the audio data and other parameters
+        const audioBase64 = data.audio;
+        const text = data.text || '';
+        const expression = data.expression || null;
+        const volumes = data.volumes || [];
+        const sliceLength = data.slice_length || 0;
+        
+        console.log('[AUDIO] Playing audio with text:', text);
+        console.log('[AUDIO] Expression:', expression);
+        
+        // Add to audio task queue
+        if (audioBase64) {
+            addAudioTask(
+                audioBase64,
+                null, // instrument_base64
+                volumes,
+                sliceLength,
+                text,
+                expression ? [expression] : null
+            );
+        } else {
+            console.error('[AUDIO] No audio data provided in message');
+        }
+    }
+};
