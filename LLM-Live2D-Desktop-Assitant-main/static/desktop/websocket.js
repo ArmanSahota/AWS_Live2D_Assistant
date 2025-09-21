@@ -74,7 +74,8 @@ async function getServerPort() {
     
     // Priority 4: Fast port discovery (limited attempts)
     console.log('[WEBSOCKET SIMPLIFIED] Starting fast port discovery...');
-    const quickPorts = [8002, 1018, 1019, 1020]; // Check port 8002 first (current server port)
+    // Check common ports including those from port manager (8000-8009) and legacy ports
+    const quickPorts = [8000, 8001, 8002, 1018, 1019, 1020, 1021, 1022, 1023, 1024, 1025];
     
     for (const port of quickPorts) {
         try {
@@ -88,8 +89,19 @@ async function getServerPort() {
             clearTimeout(timeoutId);
             
             if (response.ok) {
-                console.log(`[WEBSOCKET SIMPLIFIED] Found server on port ${port}`);
+                console.log(`[WEBSOCKET SIMPLIFIED] ✅ Found server on port ${port}`);
                 detectedPort = port;
+                
+                // Update the port file to match
+                try {
+                    // Try to update port file via Electron API if available
+                    if (window.electronAPI && window.electronAPI.updatePortFile) {
+                        window.electronAPI.updatePortFile(port);
+                    }
+                } catch (e) {
+                    console.log('[WEBSOCKET] Could not update port file');
+                }
+                
                 return port;
             }
         } catch (e) {
@@ -97,10 +109,10 @@ async function getServerPort() {
         }
     }
     
-    // Default fallback
-    console.log('[WEBSOCKET SIMPLIFIED] Using default port 1018');
-    detectedPort = 1018;
-    return 1018;
+    // Default fallback - use the most common port
+    console.log('[WEBSOCKET SIMPLIFIED] No server found, using default port 8000');
+    detectedPort = 8000;
+    return 8000;
 }
 
 async function connectWebSocket() {
@@ -214,29 +226,67 @@ function handleWebSocketMessage(data) {
             
         case 'audio-payload':
             // Handle audio payload from backend (EdgeTTS)
-            console.log('[AUDIO DEBUG] Received audio-payload message');
+            console.log('[AUDIO DEBUG] ✅ Received audio-payload message at', new Date().toISOString());
             console.log('[AUDIO DEBUG] Payload contains:', {
                 hasAudio: !!data.audio,
+                audioSize: data.audio ? data.audio.length : 0,
                 hasVolumes: !!data.volumes,
+                volumesCount: data.volumes ? data.volumes.length : 0,
                 hasText: !!data.text,
+                text: data.text,
                 hasExpression: !!data.expression_list,
                 format: data.format
             });
             
-            // Call the audio task handler
-            if (window.addAudioTask && data.audio) {
-                console.log('[AUDIO DEBUG] Adding audio task with text:', data.text);
-                window.addAudioTask(
-                    data.audio,
-                    data.instrument || "None",
-                    data.volumes || [],
-                    data.slice_length || 0.1,
-                    data.text || null,
-                    data.expression_list || null
-                );
-            } else {
-                console.error('[AUDIO DEBUG] Missing addAudioTask function or audio data');
+            // First, update subtitles immediately regardless of audio
+            if (data.text) {
+                console.log('[SUBTITLE DEBUG] Updating subtitles from audio-payload:', data.text);
+                
+                // Try multiple methods to ensure subtitle updates
+                if (window.displaySubtitles) {
+                    window.displaySubtitles(data.text);
+                }
+                
+                // Direct DOM update as fallback
+                const messageElement = document.getElementById('message');
+                if (messageElement) {
+                    messageElement.textContent = data.text;
+                    messageElement.classList.remove('hidden');
+                    console.log('[SUBTITLE DEBUG] ✅ Subtitle updated directly in DOM');
+                } else {
+                    console.error('[SUBTITLE DEBUG] ❌ Message element not found!');
+                }
             }
+            
+            // Then handle audio playback
+            if (window.addAudioTask && data.audio) {
+                console.log('[AUDIO DEBUG] ✅ Adding audio task with text:', data.text);
+                try {
+                    window.addAudioTask(
+                        data.audio,
+                        data.instrument || "None",
+                        data.volumes || [],
+                        data.slice_length || 0.1,
+                        data.text || null,
+                        data.expression_list || null
+                    );
+                } catch (error) {
+                    console.error('[AUDIO DEBUG] ❌ Error adding audio task:', error);
+                }
+            } else {
+                console.error('[AUDIO DEBUG] ❌ Missing requirements:', {
+                    hasAddAudioTask: !!window.addAudioTask,
+                    hasAudioData: !!data.audio
+                });
+                
+                // Even if audio fails, ensure subtitles are shown
+                if (!data.text) {
+                    console.warn('[AUDIO DEBUG] No text in payload to display');
+                }
+            }
+            
+            // Log successful processing
+            console.log('[AUDIO DEBUG] ✅ Audio-payload processing complete');
             break;
             
         case 'control':

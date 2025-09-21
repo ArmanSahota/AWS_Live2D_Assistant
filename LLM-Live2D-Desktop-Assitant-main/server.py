@@ -191,7 +191,7 @@ class WebSocketServer:
 
         # Set up the audio playback function
         def _websocket_audio_handler(
-            sentence: str | None, 
+            sentence: str | None,
             filepath: str | None,
             instrument_filepath: str | None = None
         ) -> None:
@@ -203,24 +203,61 @@ class WebSocketServer:
                 sentence = ""
 
             logger.info(f"Playing {filepath}...")
-            payload, duration = audio_preparer.prepare_audio_payload(
-                audio_path=filepath,
-                instrument_path=instrument_filepath,
-                display_text=sentence,
-                expression_list=l2d.extract_emotion(sentence),
-            )
-            # Ensure proper message type for frontend audio handler
-            payload["type"] = payload.get("type", "audio-payload")
-            payload.setdefault("format", "mp3")
-            logger.info("Payload prepared")
+            logger.info(f"Preparing audio payload for text: {sentence[:50]}...")
+            
+            try:
+                payload, duration = audio_preparer.prepare_audio_payload(
+                    audio_path=filepath,
+                    instrument_path=instrument_filepath,
+                    display_text=sentence,
+                    expression_list=l2d.extract_emotion(sentence),
+                )
+                # Ensure proper message type for frontend audio handler
+                payload["type"] = payload.get("type", "audio-payload")
+                payload.setdefault("format", "mp3")
+                
+                # Add debugging info
+                logger.info(f"Payload prepared - Type: {payload.get('type')}, Format: {payload.get('format')}")
+                logger.info(f"Audio size: {len(payload.get('audio', ''))} bytes, Text: {sentence[:30]}...")
+                
+                async def _send_audio():
+                    try:
+                        # Check WebSocket state before sending
+                        if websocket.client_state.value == 1:  # 1 = CONNECTED state
+                            await websocket.send_text(json.dumps(payload))
+                            logger.info(f"✅ Successfully sent audio payload with text: {sentence[:50]}...")
+                            await asyncio.sleep(duration)
+                        else:
+                            logger.error(f"❌ WebSocket not connected. State: {websocket.client_state}")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to send audio payload: {e}")
+                        logger.error(f"Error type: {type(e).__name__}")
+                        import traceback
+                        logger.error(f"Traceback: {traceback.format_exc()}")
 
-            async def _send_audio():
-                await websocket.send_text(json.dumps(payload))
-                await asyncio.sleep(duration)
-
-            asyncio.run_coroutine_threadsafe(_send_audio(), loop)
-
-            logger.info("Audio played")
+                # Fix: Use run_coroutine_threadsafe which works from non-async context
+                try:
+                    if loop:
+                        # This is being called from a non-async context (TTS callback)
+                        # so we must use run_coroutine_threadsafe
+                        future = asyncio.run_coroutine_threadsafe(_send_audio(), loop)
+                        try:
+                            # Wait for completion with timeout
+                            future.result(timeout=5)
+                            logger.info("✅ Audio payload sent successfully via run_coroutine_threadsafe")
+                        except Exception as e:
+                            logger.error(f"❌ WebSocket send failed: {e}")
+                    else:
+                        logger.error("❌ No event loop available to send audio")
+                except Exception as e:
+                    logger.error(f"❌ Failed to schedule audio send: {e}")
+                
+                logger.info("Audio handler completed")
+                
+            except Exception as e:
+                logger.error(f"❌ Error in audio handler: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
 
         open_llm_vtuber.set_audio_output_func(
             lambda sentence, filepath, instrument_filepath=None: _websocket_audio_handler(
@@ -356,6 +393,36 @@ class WebSocketServer:
                         
             except WebSocketDisconnect:
                 logger.info("WebSocket echo client disconnected")
+
+        # Test endpoint for debugging audio payload delivery
+        @self.app.post("/test-audio-payload")
+        async def test_audio_payload():
+            """Test endpoint to manually send audio payload to all connected clients"""
+            test_payload = {
+                "type": "audio-payload",
+                "text": "This is a test message from the server",
+                "audio": "SGVsbG8gV29ybGQ=",  # Base64 encoded "Hello World"
+                "volumes": [0.5, 0.7, 0.6],
+                "slice_length": 0.1,
+                "format": "mp3",
+                "expression_list": ["neutral"]
+            }
+            
+            sent_count = 0
+            for client in self.connected_clients:
+                try:
+                    await client.send_text(json.dumps(test_payload))
+                    sent_count += 1
+                    logger.info(f"Test payload sent to client {sent_count}")
+                except Exception as e:
+                    logger.error(f"Failed to send test payload to client: {e}")
+            
+            return {
+                "status": "success",
+                "message": f"Test payload sent to {sent_count} clients",
+                "payload_type": test_payload["type"],
+                "text": test_payload["text"]
+            }
 
         # the connection between this server and the frontend client
         # The version 2 of the client-ws. Introduces breaking changes.
