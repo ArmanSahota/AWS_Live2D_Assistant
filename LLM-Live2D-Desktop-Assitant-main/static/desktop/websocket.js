@@ -346,6 +346,31 @@ function handleWebSocketMessage(data) {
             }
             break;
             
+        case 'object-analysis-result':
+            // Handle object analysis results from backend
+            console.log('[VISION DEBUG] ✅ Received object-analysis-result message (CORRECT TYPE!)');
+            console.log('[VISION DEBUG] Message type fix is working - frontend receiving correct message type');
+            console.log('[VISION DEBUG] Analysis result:', {
+                analysisId: data.analysisId,
+                hasResult: !!data.result,
+                confidence: data.result ? data.result.confidence : null,
+                category: data.result ? data.result.category : null
+            });
+            
+            // Dispatch event for vision UI to handle
+            window.dispatchEvent(new MessageEvent('message', {
+                data: JSON.stringify(data)
+            }));
+            break;
+            
+        case 'vision-error':
+            // Handle vision processing errors
+            console.error('[VISION DEBUG] Vision processing error:', data.message);
+            if (window.visionAnalysisUI) {
+                window.visionAnalysisUI.updateStatus('Vision error: ' + data.message, 'error');
+            }
+            break;
+            
         case 'error':
             console.error('Server error:', data.message);
             if (window.showError) {
@@ -440,6 +465,39 @@ window.sendAudioPartition = sendAudioPartition;
 // Make ws available globally for other scripts
 window.ws = ws;
 
+// Vision-related WebSocket functions
+function sendVisionAnalysisRequest(analysisId, imageData, userQuestion) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        console.log('[VISION DEBUG] Sending vision analysis request:', analysisId);
+        ws.send(JSON.stringify({
+            type: 'object-analysis-request',
+            analysisId: analysisId,
+            imageData: imageData,
+            userQuestion: userQuestion || 'What is this object? Can you analyze it?',
+            timestamp: Date.now()
+        }));
+        return true;
+    } else {
+        console.error('[VISION DEBUG] WebSocket not connected, cannot send vision request');
+        return false;
+    }
+}
+
+function sendVisionConfig(config) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        console.log('[VISION DEBUG] Sending vision configuration:', config);
+        ws.send(JSON.stringify({
+            type: 'vision-config',
+            config: config,
+            timestamp: Date.now()
+        }));
+        return true;
+    } else {
+        console.error('[VISION DEBUG] WebSocket not connected, cannot send vision config');
+        return false;
+    }
+}
+
 // Export functions for global use
 window.wsConnection = {
     connect: connectWebSocket,
@@ -447,5 +505,7 @@ window.wsConnection = {
     sendAudioEnd: sendAudioEnd,
     sendTextInput: sendTextInput,
     sendAudioPartition: sendAudioPartition,
+    sendVisionAnalysisRequest: sendVisionAnalysisRequest,
+    sendVisionConfig: sendVisionConfig,
     getState: () => ws ? ws.readyState : WebSocket.CLOSED
 };

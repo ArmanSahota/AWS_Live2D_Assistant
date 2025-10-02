@@ -1,0 +1,15 @@
+{
+  "httpBase": "https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev",
+  "vision_enabled": true,
+  "claude_model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+  "vision_settings": {
+    "max_image_size": 5242880,
+    "supported_formats": [
+      "jpeg",
+      "jpg",
+      "png",
+      "webp"
+    ],
+    "timeout": 30
+  }
+}

@@ -46,6 +46,10 @@ class AudioManager:
         Returns:
         - str or None: The path of the generated audio file, or None if the sentence iempty
         """
+        print(f"[AUDIO TTS DEBUG] generate_audio_file() called")
+        print(f"[AUDIO TTS DEBUG] - Text: {sentence[:100]}{'...' if len(sentence) > 100 else ''}")
+        print(f"[AUDIO TTS DEBUG] - File name: {file_name_no_ext}")
+        print(f"[AUDIO TTS DEBUG] - Source: Normal conversation pipeline")
         sentence = self.clean_text(sentence)
         if self.verbose:
             print(f">> generating {file_name_no_ext}...")
@@ -110,5 +114,58 @@ class AudioManager:
                     self.play_audio_file(sentence=sentence,     filepath=audio_filepath)
                 else:
                     print("No audio generated for sentence.")
+
+    def speak_vision_analysis(self, analysis_text: str, analysis_id: str) -> bool:
+        """
+        Generate and play TTS for vision analysis results.
+        
+        Args:
+            analysis_text: The vision analysis text to speak
+            analysis_id: Unique identifier for the analysis
+            
+        Returns:
+            bool: True if TTS was successful, False otherwise
+        """
+        try:
+            print(f"[VISION AUDIO] Speaking vision analysis {analysis_id}")
+            
+            # Clean text for TTS
+            clean_text = self.clean_text(analysis_text)
+            
+            # Remove Live2D emotion keywords if needed
+            if self.live2d:
+                clean_text = self.live2d.remove_emotion_keywords(clean_text)
+            
+            # Handle translation if enabled
+            if self.translator and self.config.get("TRANSLATE_AUDIO", False):
+                try:
+                    print("[VISION AUDIO] Translating vision analysis...")
+                    clean_text = self.translator.translate(clean_text)
+                    print(f"[VISION AUDIO] Translated: {clean_text[:100]}...")
+                except Exception as e:
+                    print(f"[VISION AUDIO] Translation failed: {e}")
+            
+            # Generate audio
+            audio_filepath = self.generate_audio_file(
+                clean_text,
+                file_name_no_ext=f"vision_{analysis_id}"
+            )
+            
+            if audio_filepath:
+                # Play the audio
+                self.play_audio_file(
+                    sentence=analysis_text,
+                    filepath=audio_filepath,
+                    instrument_filepath=None
+                )
+                print(f"[VISION AUDIO] ✅ Vision analysis spoken successfully")
+                return True
+            else:
+                print(f"[VISION AUDIO] ⚠️ No audio generated")
+                return False
+                
+        except Exception as e:
+            print(f"[VISION AUDIO] ❌ Error speaking vision analysis: {e}")
+            return False
 
 

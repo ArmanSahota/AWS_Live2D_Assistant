@@ -42,6 +42,32 @@ const store = new Store({
       useLocalSTT: defBool(process.env.FEATURE_USE_LOCAL_STT, true),
       useCloudFallbacks: defBool(process.env.FEATURE_USE_CLOUD_FALLBACKS, true),
       useLocalWS: defBool(process.env.FEATURE_USE_LOCAL_WS, false),
+      useVision: defBool(process.env.FEATURE_USE_VISION, false),
+    },
+    vision: {
+      enabled: defBool(process.env.VISION_ENABLED, false),
+      captureMode: process.env.VISION_CAPTURE_MODE || 'manual', // 'manual', 'speech-triggered', 'periodic'
+      captureQuality: parseFloat(process.env.VISION_CAPTURE_QUALITY || '0.8'),
+      resolution: process.env.VISION_RESOLUTION || '1280x720',
+      periodicInterval: parseInt(process.env.VISION_PERIODIC_INTERVAL || '30000'),
+      compressionEnabled: defBool(process.env.VISION_COMPRESSION_ENABLED, true),
+      confidenceThreshold: parseFloat(process.env.VISION_CONFIDENCE_THRESHOLD || '0.7'),
+      maxImageSize: parseInt(process.env.VISION_MAX_IMAGE_SIZE || '1048576'), // 1MB
+      rateLimitMs: parseInt(process.env.VISION_RATE_LIMIT_MS || '5000'), // 5 seconds
+      categories: {
+        automotive: defBool(process.env.VISION_CATEGORY_AUTOMOTIVE, true),
+        electronics: defBool(process.env.VISION_CATEGORY_ELECTRONICS, true),
+        tools: defBool(process.env.VISION_CATEGORY_TOOLS, true),
+        appliances: defBool(process.env.VISION_CATEGORY_APPLIANCES, true),
+        medical: defBool(process.env.VISION_CATEGORY_MEDICAL, false)
+      },
+      analysis: {
+        includeRepairInfo: defBool(process.env.VISION_INCLUDE_REPAIR_INFO, true),
+        includeCostEstimates: defBool(process.env.VISION_INCLUDE_COST_ESTIMATES, true),
+        includeSafetyWarnings: defBool(process.env.VISION_INCLUDE_SAFETY_WARNINGS, true),
+        includeSpecifications: defBool(process.env.VISION_INCLUDE_SPECIFICATIONS, true),
+        detailLevel: process.env.VISION_DETAIL_LEVEL || 'comprehensive' // 'basic', 'detailed', 'comprehensive'
+      }
     },
     aws: {
       region: process.env.AWS_REGION || process.env.VITE_AWS_REGION || 'us-west-2',
@@ -50,7 +76,7 @@ const store = new Store({
       cognitoUserPoolId: process.env.COGNITO_USER_POOL_ID || process.env.VITE_COGNITO_USER_POOL_ID || '',
       cognitoClientId: process.env.COGNITO_CLIENT_ID || process.env.VITE_COGNITO_CLIENT_ID || '',
       cognitoDomain: process.env.COGNITO_DOMAIN || process.env.VITE_COGNITO_DOMAIN || '',
-      modelId: process.env.MODEL_ID || process.env.VITE_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      modelId: process.env.MODEL_ID || process.env.VITE_MODEL_ID || 'anthropic.claude-3-7-sonnet-20250219-v1:0',
     },
     live2d: {
       defaultModel: 'live2d-models/elaina/elaina.model3.json',
@@ -83,7 +109,7 @@ function readConfig() {
       cognitoUserPoolId: process.env.COGNITO_USER_POOL_ID || process.env.VITE_COGNITO_USER_POOL_ID || '',
       cognitoClientId: process.env.COGNITO_CLIENT_ID || process.env.VITE_COGNITO_CLIENT_ID || '',
       cognitoDomain: process.env.COGNITO_DOMAIN || process.env.VITE_COGNITO_DOMAIN || '',
-      modelId: process.env.MODEL_ID || process.env.VITE_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      modelId: process.env.MODEL_ID || process.env.VITE_MODEL_ID || 'anthropic.claude-3-7-sonnet-20250219-v1:0',
     },
     live2d: {
       defaultModel: process.env.DEFAULT_MODEL || 'live2d-models/elaina/elaina.model3.json',

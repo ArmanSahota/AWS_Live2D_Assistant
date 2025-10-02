@@ -21,4 +21,8 @@ engine = TTSFactory.get_tts_engine("pyttsx3TTS")
 file_path = engine.generate_audio("${escapedText}", "${tempFileFixed}")
 print(file_path)
           `
-        ]);
+            ]);
+          } catch (error) {
+            reject(error);
+          }
+        });

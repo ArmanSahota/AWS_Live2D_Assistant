@@ -105,6 +105,11 @@ class ConversationManager:
             return input("\n>> ")
 
     def speak(self, chat_completion: Iterator[str], user_input: str) -> str:
+        print(f"[CONVERSATION TTS DEBUG] speak() method called")
+        print(f"[CONVERSATION TTS DEBUG] - Input source: Normal conversation (not vision analysis)")
+        print(f"[CONVERSATION TTS DEBUG] - TTS enabled: {self.config.get('TTS_ON', False)}")
+        print(f"[CONVERSATION TTS DEBUG] - Will generate audio and play through speakers")
+        
         full_response = ""
         if self.config.get("SAY_SENTENCE_SEPARATELY", True):
             full_response = self.speak_by_sentence_chain(

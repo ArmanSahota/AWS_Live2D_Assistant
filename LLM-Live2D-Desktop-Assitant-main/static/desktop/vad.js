@@ -94,6 +94,9 @@ async function init_vad() {
                 console.log("Not interrupted. Just normal conversation");
             }
             resetNoSpeechTimeout();
+            
+            // VISION INTEGRATION: Trigger image capture on speech detection
+            handleSpeechTriggeredVision();
         },
         onFrameProcessed: (probs) => {
             if (probs["isSpeech"] > window.previousTriggeredProbability) {
@@ -430,3 +433,118 @@ window.electronAPI.setSensitivity((event, value) => {
 document.getElementById('speechProbThreshold').addEventListener('change', function() {
     window.updateSensitivity(this.value);
 });
+
+// VISION INTEGRATION: Handle speech-triggered vision capture
+async function handleSpeechTriggeredVision() {
+    try {
+        // Check if vision system is enabled and configured for speech triggering
+        if (!window.webcamManager || !window.webcamManager.isActive) {
+            console.log('[VAD-VISION] Webcam not active, skipping vision capture');
+            return;
+        }
+        
+        const captureMode = window.webcamManager.config.captureMode;
+        if (captureMode !== 'speech-triggered') {
+            console.log('[VAD-VISION] Capture mode is not speech-triggered, skipping');
+            return;
+        }
+        
+        // Rate limiting: don't capture too frequently
+        const now = Date.now();
+        if (!window.lastVisionCapture) window.lastVisionCapture = 0;
+        const timeSinceLastCapture = now - window.lastVisionCapture;
+        
+        if (timeSinceLastCapture < 5000) { // 5 second minimum interval
+            console.log('[VAD-VISION] Vision capture rate limited');
+            return;
+        }
+        
+        console.log('[VAD-VISION] Triggering vision capture on speech detection');
+        
+        // Capture image for potential analysis
+        const imageData = await window.webcamManager.captureForAnalysis();
+        if (imageData) {
+            window.lastVisionCapture = now;
+            
+            // Store captured image for potential use with speech transcription
+            window.lastCapturedImage = {
+                data: imageData,
+                timestamp: now
+            };
+            
+            console.log('[VAD-VISION] Image captured and stored for potential analysis');
+            
+            // Update vision UI if available
+            if (window.visionAnalysisUI) {
+                window.visionAnalysisUI.showCapturedImage(imageData);
+            }
+        }
+        
+    } catch (error) {
+        console.error('[VAD-VISION] Error during speech-triggered vision capture:', error);
+    }
+}
+
+// Function to check if captured image should be analyzed with speech
+function shouldAnalyzeVisionWithSpeech(speechText) {
+    if (!window.lastCapturedImage) return false;
+    
+    // Check if image was captured recently (within 10 seconds of speech)
+    const timeSinceCapture = Date.now() - window.lastCapturedImage.timestamp;
+    if (timeSinceCapture > 10000) {
+        console.log('[VAD-VISION] Captured image too old, not using for analysis');
+        return false;
+    }
+    
+    // Check if speech contains vision-related keywords
+    const visionKeywords = [
+        'what is this', 'analyze this', 'look at this', 'see this',
+        'identify', 'what am i holding', 'can you see', 'examine',
+        'describe', 'tell me about', 'what do you think'
+    ];
+    
+    const lowerSpeech = speechText.toLowerCase();
+    const hasVisionKeywords = visionKeywords.some(keyword =>
+        lowerSpeech.includes(keyword)
+    );
+    
+    if (hasVisionKeywords) {
+        console.log('[VAD-VISION] Speech contains vision keywords, will analyze with image');
+        return true;
+    }
+    
+    return false;
+}
+
+// Function to send combined speech and vision analysis
+async function sendCombinedAnalysis(speechText, imageData) {
+    try {
+        console.log('[VAD-VISION] Sending combined speech and vision analysis');
+        
+        const analysisId = Date.now().toString();
+        const success = window.wsConnection.sendVisionAnalysisRequest(
+            analysisId,
+            imageData.split(',')[1], // Remove data URL prefix
+            speechText
+        );
+        
+        if (success) {
+            console.log('[VAD-VISION] Combined analysis request sent successfully');
+            
+            // Update UI to show analysis in progress
+            if (window.visionAnalysisUI) {
+                window.visionAnalysisUI.updateStatus('Analyzing speech and image...', 'processing');
+            }
+        } else {
+            console.error('[VAD-VISION] Failed to send combined analysis request');
+        }
+        
+    } catch (error) {
+        console.error('[VAD-VISION] Error sending combined analysis:', error);
+    }
+}
+
+// Make vision functions available globally
+window.handleSpeechTriggeredVision = handleSpeechTriggeredVision;
+window.shouldAnalyzeVisionWithSpeech = shouldAnalyzeVisionWithSpeech;
+window.sendCombinedAnalysis = sendCombinedAnalysis;
