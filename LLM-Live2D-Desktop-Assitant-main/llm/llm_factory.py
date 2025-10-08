@@ -4,6 +4,7 @@ from .ollama import LLM as OllamaLLM
 from .memGPT import LLM as MemGPTLLM
 from .fake_llm import LLM as FakeLLM
 from .claude import LLM as ClaudeLLM
+from .manufacturing_rag_llm import LLM as ManufacturingRAGLLM
 
 
 class LLMFactory:
@@ -58,6 +59,13 @@ class LLMFactory:
                 base_url=kwargs.get("BASE_URL"),
                 model=kwargs.get("MODEL"),
                 llm_api_key=kwargs.get("LLM_API_KEY"),
+                verbose=kwargs.get("VERBOSE", False),
+            )
+        elif llm_provider == "manufacturing_rag" or llm_provider == "manufacturing-rag":
+            return ManufacturingRAGLLM(
+                system=kwargs.get("SYSTEM_PROMPT"),
+                base_url=kwargs.get("BASE_URL"),
+                model=kwargs.get("MODEL", "manufacturing-rag-demo"),
                 verbose=kwargs.get("VERBOSE", False),
             )
         elif llm_provider == "fakellm":

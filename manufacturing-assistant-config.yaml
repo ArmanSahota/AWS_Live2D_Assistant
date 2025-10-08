@@ -1,0 +1,333 @@
+# Manufacturing VTuber Assistant Configuration
+# Enhanced configuration for RAG-powered manufacturing support
+
+# ===== BASIC CONFIGURATION =====
+PERSONA_CHOICE: "manufacturing_assistant"  # Use manufacturing-specific persona
+VERBOSE: true
+DEBUG: false
+
+# ===== MANUFACTURING RAG CONFIGURATION =====
+MANUFACTURING_RAG:
+  ENABLED: true
+  HTTP_BASE_URL: "https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev"
+  KNOWLEDGE_BASE_ID: "manufacturing-kb-001"  # Will be created when RAG is enabled
+  AWS_REGION: "us-west-2"
+  
+  # Caching configuration for performance
+  CACHE_ENABLED: true
+  CACHE_SIZE: 100
+  CACHE_TTL: 3600  # 1 hour
+  
+  # Safety and priority settings
+  SAFETY_PRIORITY: true
+  SAFETY_LEVELS: ["critical", "high", "medium", "low"]
+  
+  # Query enhancement settings
+  CONTEXT_EXTRACTION: true
+  MACHINE_ID_PATTERNS: ["machine\\s+([A-Z0-9\\-]+)", "equipment\\s+([A-Z0-9\\-]+)", "unit\\s+([A-Z0-9\\-]+)"]
+  ERROR_CODE_PATTERNS: ["error\\s+([A-Z0-9\\-]+)", "code\\s+([A-Z0-9\\-]+)", "fault\\s+([A-Z0-9\\-]+)"]
+  
+  # Document retrieval settings
+  MAX_RETRIEVED_DOCS: 5
+  SEARCH_TYPE: "HYBRID"  # SEMANTIC, KEYWORD, or HYBRID
+  CONFIDENCE_THRESHOLD: 0.7
+
+# ===== LLM CONFIGURATION =====
+LLM_MODEL: "manufacturing_rag"  # Use the manufacturing RAG client
+LLM_API_KEY: ""  # Not needed for AWS endpoint
+HTTP_BASE_URL: "https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev"
+
+# ===== AUDIO CONFIGURATION =====
+# Enhanced for manufacturing environments
+ASR_MODEL: "Faster-Whisper"
+ASR_LANGUAGE: "en"
+
+# Manufacturing-specific wake words
+WAKE_WORD:
+  ENABLED: true
+  KEYWORDS: ["hey assistant", "technical help", "machine support", "safety check"]
+  SENSITIVITY: 0.7
+  
+# Noise filtering for industrial environments
+AUDIO_PROCESSING:
+  NOISE_REDUCTION: true
+  INDUSTRIAL_FILTER: true
+  GAIN_CONTROL: true
+  SAMPLE_RATE: 16000
+
+# ===== TTS CONFIGURATION =====
+TTS_MODEL: "EDGE_TTS"
+EDGE_TTS:
+  voice: "en-US-JennyNeural"  # Clear, professional voice
+  rate: "+0%"
+  pitch: "+0Hz"
+  volume: "+10%"  # Slightly louder for industrial environments
+  style: "professional"
+
+# ===== MANUFACTURING-SPECIFIC FEATURES =====
+MANUFACTURING_FEATURES:
+  # Quick command shortcuts
+  QUICK_COMMANDS:
+    "emergency stop": "What is the emergency stop procedure?"
+    "safety protocol": "Show me the safety protocols for this area"
+    "machine status": "Check the current machine status"
+    "part lookup": "Help me find part information"
+    "maintenance schedule": "Show maintenance requirements"
+  
+  # Department-specific contexts
+  DEPARTMENTS:
+    - "production"
+    - "maintenance" 
+    - "quality"
+    - "safety"
+    - "engineering"
+  
+  # Machine categories for better context
+  MACHINE_CATEGORIES:
+    - "cnc"
+    - "assembly"
+    - "packaging"
+    - "testing"
+    - "conveyor"
+    - "robot"
+  
+  # Safety levels and their priorities
+  SAFETY_LEVELS:
+    critical:
+      priority: 1
+      prefix: "🚨 CRITICAL SAFETY WARNING: "
+      color: "red"
+    high:
+      priority: 2
+      prefix: "⚠️ SAFETY WARNING: "
+      color: "orange"
+    medium:
+      priority: 3
+      prefix: "⚠️ CAUTION: "
+      color: "yellow"
+    low:
+      priority: 4
+      prefix: "ℹ️ NOTE: "
+      color: "blue"
+
+# ===== VISION ANALYSIS =====
+VISION_ANALYSIS:
+  ENABLED: true
+  MANUFACTURING_FOCUS: true
+  
+  # Manufacturing-specific analysis prompts
+  ANALYSIS_PROMPTS:
+    equipment: "Analyze this equipment image for: make/model, visible part numbers, operational status, safety concerns, maintenance needs"
+    schematic: "Analyze this schematic for: component identification, connection points, specifications, safety considerations"
+    error_display: "Analyze this error display for: error codes, status indicators, diagnostic information, recommended actions"
+    safety_issue: "Analyze this image for: safety hazards, compliance issues, required protective equipment, immediate actions needed"
+
+# ===== CONVERSATION MANAGEMENT =====
+CONVERSATION:
+  # Manufacturing-specific conversation settings
+  MAX_HISTORY: 10
+  CONTEXT_RETENTION: true
+  SAFETY_CONTEXT_PRIORITY: true
+  
+  # Response formatting for voice output
+  VOICE_OPTIMIZED: true
+  AVOID_COMPLEX_FORMATTING: true
+  STEP_BY_STEP_RESPONSES: true
+  
+  # Manufacturing terminology
+  TECHNICAL_VOCABULARY: true
+  PART_NUMBER_RECOGNITION: true
+  MEASUREMENT_UNIT_AWARENESS: true
+
+# ===== INTEGRATION SETTINGS =====
+INTEGRATION:
+  # MES/ERP system integration (future enhancement)
+  MES_INTEGRATION: false
+  ERP_INTEGRATION: false
+  
+  # Maintenance management system
+  CMMS_INTEGRATION: false
+  
+  # Quality management system
+  QMS_INTEGRATION: false
+  
+  # Real-time machine data
+  SCADA_INTEGRATION: false
+
+# ===== LOGGING AND MONITORING =====
+LOGGING:
+  LEVEL: "INFO"
+  MANUFACTURING_EVENTS: true
+  SAFETY_INCIDENTS: true
+  QUERY_ANALYTICS: true
+  
+  # Compliance logging
+  AUDIT_TRAIL: true
+  REGULATORY_COMPLIANCE: true
+  
+  # Performance monitoring
+  RESPONSE_TIME_TRACKING: true
+  ACCURACY_METRICS: true
+
+# ===== SECURITY SETTINGS =====
+SECURITY:
+  # Access control
+  ROLE_BASED_ACCESS: false  # Set to true in production
+  USER_AUTHENTICATION: false  # Set to true in production
+  
+  # Data protection
+  ENCRYPT_CONVERSATIONS: true
+  ANONYMIZE_LOGS: true
+  
+  # Compliance
+  GDPR_COMPLIANCE: true
+  HIPAA_COMPLIANCE: false
+  SOX_COMPLIANCE: false
+
+# ===== PERFORMANCE OPTIMIZATION =====
+PERFORMANCE:
+  # Response caching
+  CACHE_FREQUENT_QUERIES: true
+  CACHE_MACHINE_SPECIFIC: true
+  
+  # Preloading
+  PRELOAD_COMMON_DOCS: true
+  PRELOAD_SAFETY_PROTOCOLS: true
+  
+  # Connection pooling
+  HTTP_CONNECTION_POOL: true
+  MAX_CONNECTIONS: 10
+
+# ===== LIVE2D CONFIGURATION =====
+LIVE2D:
+  MODEL_PATH: "static/desktop/models/manufacturing_assistant/"
+  
+  # Manufacturing-appropriate expressions
+  EXPRESSIONS:
+    default: "neutral"
+    safety_warning: "serious"
+    helpful: "smile"
+    thinking: "concentrate"
+    error: "concerned"
+  
+  # Gestures for manufacturing context
+  GESTURES:
+    pointing: true
+    warning: true
+    thumbs_up: true
+    stop_gesture: true
+
+# ===== SAMPLE MANUFACTURING CONTEXTS =====
+SAMPLE_CONTEXTS:
+  production_line_1:
+    machine_id: "PL1-CNC-001"
+    department: "production"
+    shift: "day"
+    safety_level: "high"
+  
+  maintenance_bay:
+    machine_id: "MB-LIFT-002"
+    department: "maintenance"
+    shift: "night"
+    safety_level: "critical"
+  
+  quality_lab:
+    machine_id: "QL-TEST-003"
+    department: "quality"
+    shift: "day"
+    safety_level: "medium"
+
+# ===== EXAMPLE QUERIES FOR TESTING =====
+TEST_QUERIES:
+  safety:
+    - "What is the lockout tagout procedure for machine PL1-CNC-001?"
+    - "Show me the emergency shutdown steps"
+    - "What PPE is required in the welding area?"
+  
+  troubleshooting:
+    - "Machine XYZ-123 is showing error code E456, what should I do?"
+    - "The conveyor belt is making unusual noise, help me diagnose"
+    - "Robot arm is not responding, troubleshooting steps?"
+  
+  maintenance:
+    - "When is the next scheduled maintenance for machine ABC-789?"
+    - "What are the lubrication requirements for the main spindle?"
+    - "Show me the replacement procedure for part number P12345"
+  
+  parts:
+    - "I need the part number for the main drive belt"
+    - "What's the torque specification for bolt assembly B456?"
+    - "Show me compatible replacement parts for component C789"
+
+# ===== DEPLOYMENT INFORMATION =====
+DEPLOYMENT:
+  ENVIRONMENT: "production"  # development, staging, production
+  VERSION: "1.0.0"
+  LAST_UPDATED: "2024-01-15"
+  
+  # AWS Configuration
+  AWS:
+    REGION: "us-west-2"
+    ACCOUNT_ID: "123456789012"  # Update with your actual account ID
+    
+    # Service endpoints
+    BEDROCK_ENDPOINT: "https://bedrock-runtime.us-west-2.amazonaws.com"
+    S3_BUCKET: "live2d-aws-backend-documentsbucket-gvqh2hzqj761"
+    OPENSEARCH_DOMAIN: "manufacturing-vectors"
+    
+    # New infrastructure details
+    WS_URL: "wss://sz0alheq5d.execute-api.us-west-2.amazonaws.com/dev"
+    HTTP_BASE: "https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev"
+    RAG_ENABLED: false  # Currently false, will be enabled after setup
+    
+    # Monitoring
+    CLOUDWATCH_LOG_GROUP: "/aws/lambda/manufacturing-claude-rag"
+    SNS_ALERTS_TOPIC: "manufacturing-assistant-alerts"
+
+# ===== TROUBLESHOOTING =====
+TROUBLESHOOTING:
+  # Common issues and solutions
+  COMMON_ISSUES:
+    knowledge_base_sync_failed:
+      description: "Knowledge base synchronization failed"
+      solutions:
+        - "Check S3 bucket permissions"
+        - "Verify IAM role policies"
+        - "Ensure document formats are supported"
+    
+    lambda_timeout:
+      description: "Lambda function timeout errors"
+      solutions:
+        - "Increase timeout settings to 60 seconds"
+        - "Optimize document retrieval queries"
+        - "Implement proper error handling"
+    
+    poor_retrieval_quality:
+      description: "Retrieved documents not relevant"
+      solutions:
+        - "Adjust chunking parameters"
+        - "Improve document metadata"
+        - "Fine-tune search queries"
+
+# ===== MAINTENANCE SCHEDULE =====
+MAINTENANCE:
+  # Regular maintenance tasks
+  DAILY:
+    - "Check system health metrics"
+    - "Review error logs"
+    - "Verify API endpoints"
+  
+  WEEKLY:
+    - "Update knowledge base with new documents"
+    - "Review usage analytics"
+    - "Check cache performance"
+  
+  MONTHLY:
+    - "Security audit"
+    - "Performance optimization review"
+    - "Cost analysis and optimization"
+  
+  QUARTERLY:
+    - "Full system backup"
+    - "Disaster recovery testing"
+    - "User feedback analysis and improvements"

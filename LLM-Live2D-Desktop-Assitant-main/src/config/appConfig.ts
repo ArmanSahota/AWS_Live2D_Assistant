@@ -27,6 +27,9 @@ export interface AWSConfig {
   cognitoClientId: string;
   cognitoDomain: string;
   modelId: string;
+  // RAG Configuration
+  documentsBucketName?: string;
+  ragEnabled?: boolean;
 }
 
 // Define the application configuration interface
@@ -55,6 +58,9 @@ const store = new Store({
       cognitoClientId: process.env.VITE_COGNITO_CLIENT_ID || '',
       cognitoDomain: process.env.VITE_COGNITO_DOMAIN || '',
       modelId: process.env.VITE_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      // RAG Configuration
+      documentsBucketName: process.env.VITE_DOCUMENTS_BUCKET_NAME || 'live2d-aws-backend-documentsbucket-gvqh2hzqj761',
+      ragEnabled: process.env.VITE_RAG_ENABLED === 'true' || false,
     }
   }
 });
@@ -81,6 +87,9 @@ export function readConfig(): AppConfig {
       cognitoClientId: process.env.VITE_COGNITO_CLIENT_ID || '',
       cognitoDomain: process.env.VITE_COGNITO_DOMAIN || '',
       modelId: process.env.VITE_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      // RAG Configuration
+      documentsBucketName: process.env.VITE_DOCUMENTS_BUCKET_NAME || 'live2d-aws-backend-documentsbucket-gvqh2hzqj761',
+      ragEnabled: process.env.VITE_RAG_ENABLED === 'true' || false,
     }
   };
 

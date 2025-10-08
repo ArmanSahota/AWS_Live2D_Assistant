@@ -1,0 +1,131 @@
+CONVEYOR BELT MAINTENANCE MANUAL
+
+Document ID: MM-003
+Equipment: Assembly Line Conveyor System
+Model: AL-CONV-100, AL-CONV-200
+Revision: 1.8
+Date: 2024-01-05
+Department: Production Engineering
+
+SYSTEM OVERVIEW
+===============
+The assembly line conveyor system consists of:
+- Main drive motor (5 HP, 1800 RPM)
+- Reduction gearbox (20:1 ratio)
+- Drive pulley (12" diameter)
+- Tail pulley (8" diameter)
+- Belt tensioning system
+- Safety guards and emergency stops
+
+SPECIFICATIONS
+==============
+Belt Type: Polyurethane, 24" wide
+Belt Speed: 15 feet per minute (variable)
+Load Capacity: 500 lbs distributed
+Operating Temperature: 32°F to 120°F
+Power Requirements: 480V, 3-phase, 60Hz
+
+DAILY MAINTENANCE CHECKLIST
+============================
+□ Visual inspection of belt condition
+□ Check belt tracking and alignment
+□ Verify proper belt tension
+□ Inspect safety guards and emergency stops
+□ Check for unusual noise or vibration
+□ Clean debris from belt surface
+□ Verify proper lubrication of bearings
+
+WEEKLY MAINTENANCE
+==================
+1. BELT INSPECTION
+   - Check for cuts, tears, or excessive wear
+   - Measure belt thickness at multiple points
+   - Inspect belt edges for fraying
+   - Document wear patterns
+
+2. DRIVE SYSTEM CHECK
+   - Inspect motor coupling alignment
+   - Check gearbox oil level
+   - Verify drive pulley condition
+   - Test variable speed control
+
+3. SAFETY SYSTEMS
+   - Test all emergency stop buttons
+   - Verify safety guard integrity
+   - Check warning lights and alarms
+   - Test pull-cord emergency stops
+
+MONTHLY MAINTENANCE
+===================
+1. LUBRICATION SCHEDULE
+   Drive Motor Bearings: High-temp grease (Part #: LUB-HT-001)
+   Gearbox: SAE 90 gear oil (Part #: OIL-SAE90-5GAL)
+   Tail Pulley Bearings: Multi-purpose grease (Part #: LUB-MP-002)
+
+2. BELT TENSIONING
+   Proper tension: 50-60 lbs deflection force
+   Adjustment procedure:
+   a. Stop conveyor and apply LOTO
+   b. Loosen tail pulley mounting bolts
+   c. Adjust tension using threaded rods
+   d. Check belt tracking after adjustment
+   e. Tighten mounting bolts to 85 ft-lbs
+
+3. ELECTRICAL INSPECTION
+   - Check motor connections
+   - Inspect control panel components
+   - Test variable frequency drive (VFD)
+   - Verify proper grounding
+
+TROUBLESHOOTING GUIDE
+=====================
+
+PROBLEM: Belt slipping
+CAUSES: Low tension, worn pulley, contaminated belt
+SOLUTION: Adjust tension, clean pulleys, replace if worn
+
+PROBLEM: Belt tracking off-center
+CAUSES: Misaligned pulleys, uneven loading, worn components
+SOLUTION: Realign pulleys, check loading, inspect for wear
+
+PROBLEM: Excessive noise
+CAUSES: Worn bearings, misalignment, loose components
+SOLUTION: Lubricate bearings, check alignment, tighten fasteners
+
+PROBLEM: Motor overheating
+CAUSES: Overloading, poor ventilation, electrical issues
+SOLUTION: Reduce load, clean motor, check electrical connections
+
+REPLACEMENT PARTS
+=================
+Belt Assembly: Part #: BELT-PU-24-100FT
+Drive Motor: Part #: MOTOR-5HP-1800
+Gearbox: Part #: GEARBOX-20-1-RATIO
+Drive Pulley: Part #: PULLEY-DRIVE-12
+Tail Pulley: Part #: PULLEY-TAIL-8
+Emergency Stop Button: Part #: ESTOP-RED-NC
+
+SAFETY WARNINGS
+===============
+⚠️ DANGER: Moving machinery can cause serious injury or death
+- Always apply lockout/tagout before maintenance
+- Never reach over or under moving conveyor
+- Keep loose clothing and jewelry away from moving parts
+- Use proper lifting techniques for heavy components
+
+⚠️ ELECTRICAL HAZARD: 480V can be fatal
+- Only qualified electricians should work on electrical systems
+- Verify power is off before working on electrical components
+- Use proper PPE when working with electrical systems
+
+MAINTENANCE RECORDS
+===================
+Date: _________ Technician: ________________
+Work Performed: ____________________________
+Parts Used: ________________________________
+Next Service Due: __________________________
+
+For technical support, contact:
+Maintenance Department: Ext. 2922
+Parts Department: Ext. 2944
+Engineering: Ext. 2955

@@ -77,6 +77,9 @@ const store = new Store({
       cognitoClientId: process.env.COGNITO_CLIENT_ID || process.env.VITE_COGNITO_CLIENT_ID || '',
       cognitoDomain: process.env.COGNITO_DOMAIN || process.env.VITE_COGNITO_DOMAIN || '',
       modelId: process.env.MODEL_ID || process.env.VITE_MODEL_ID || 'anthropic.claude-3-7-sonnet-20250219-v1:0',
+      // RAG Configuration
+      documentsBucketName: process.env.DOCUMENTS_BUCKET_NAME || 'live2d-aws-backend-documentsbucket-gvqh2hzqj761',
+      ragEnabled: process.env.RAG_ENABLED === 'false' ? false : true, // Default to enabled
     },
     live2d: {
       defaultModel: 'live2d-models/elaina/elaina.model3.json',
@@ -104,12 +107,15 @@ function readConfig() {
     },
     aws: {
       region: process.env.AWS_REGION || process.env.VITE_AWS_REGION || 'us-west-2',
-      wsUrl: process.env.WS_URL || process.env.VITE_WS_URL || '',
-      httpBaseUrl: process.env.HTTP_BASE || process.env.VITE_HTTP_BASE || '',
+      wsUrl: process.env.WS_URL || process.env.VITE_WS_URL || 'wss://sz0alheq5d.execute-api.us-west-2.amazonaws.com/dev',
+      httpBaseUrl: process.env.HTTP_BASE || process.env.VITE_HTTP_BASE || 'https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev',
       cognitoUserPoolId: process.env.COGNITO_USER_POOL_ID || process.env.VITE_COGNITO_USER_POOL_ID || '',
       cognitoClientId: process.env.COGNITO_CLIENT_ID || process.env.VITE_COGNITO_CLIENT_ID || '',
       cognitoDomain: process.env.COGNITO_DOMAIN || process.env.VITE_COGNITO_DOMAIN || '',
       modelId: process.env.MODEL_ID || process.env.VITE_MODEL_ID || 'anthropic.claude-3-7-sonnet-20250219-v1:0',
+      // RAG Configuration
+      documentsBucketName: process.env.DOCUMENTS_BUCKET_NAME || 'live2d-aws-backend-documentsbucket-gvqh2hzqj761',
+      ragEnabled: process.env.RAG_ENABLED === 'false' ? false : true, // Default to enabled
     },
     live2d: {
       defaultModel: process.env.DEFAULT_MODEL || 'live2d-models/elaina/elaina.model3.json',

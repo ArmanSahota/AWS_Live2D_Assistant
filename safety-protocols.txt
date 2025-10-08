@@ -1,0 +1,25 @@
+
+MANUFACTURING SAFETY PROTOCOLS
+=============================
+
+LOCKOUT/TAGOUT PROCEDURE:
+1. Notify all affected personnel
+2. Shut down equipment using normal stopping procedure
+3. Isolate energy sources (electrical, pneumatic, hydraulic)
+4. Apply lockout/tagout devices
+5. Verify isolation by attempting to start equipment
+6. Perform maintenance work
+7. Remove lockout/tagout devices only by authorized person
+
+EMERGENCY PROCEDURES:
+- Emergency stop buttons located every 50 feet
+- Fire extinguishers at each workstation
+- First aid stations marked with green crosses
+- Emergency contact: 911 or internal extension 2911
+
+PPE REQUIREMENTS:
+- Safety glasses required in all production areas
+- Hard hats required in overhead work zones
+- Steel-toed boots mandatory on production floor
+- Hearing protection required in high-noise areas (>85dB)
+            

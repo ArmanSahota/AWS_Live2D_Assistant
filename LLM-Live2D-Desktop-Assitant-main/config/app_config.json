@@ -7,5 +7,11 @@
     "max_image_size": 5242880,
     "supported_formats": ["jpeg", "jpg", "png", "webp"],
     "timeout": 30
+  },
+  "rag_config": {
+    "enabled": false,
+    "documents_bucket_name": "live2d-aws-backend-documentsbucket-gvqh2hzqj761",
+    "knowledge_base_id": "",
+    "aws_region": "us-west-2"
   }
 }

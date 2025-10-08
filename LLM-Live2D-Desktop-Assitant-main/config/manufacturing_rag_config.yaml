@@ -1,0 +1,72 @@
+# Manufacturing RAG VTuber Configuration
+# This configuration enables RAG functionality with manufacturing knowledge
+
+# ===== BASIC CONFIGURATION =====
+PERSONA_CHOICE: "manufacturing_assistant"
+VERBOSE: true
+DEBUG: false
+
+# ===== LLM CONFIGURATION =====
+LLM_PROVIDER: "manufacturing_rag"  # Use the new manufacturing RAG provider
+SYSTEM_PROMPT: |
+  You are a specialized manufacturing assistant VTuber with access to technical documentation, 
+  machine manuals, safety protocols, and troubleshooting guides. Your responses must:
+  
+  🚨 PRIORITIZE SAFETY: Always highlight safety warnings and precautions first
+  📋 BE PRECISE: Provide exact part numbers, specifications, and procedures  
+  📖 CITE SOURCES: Reference specific manuals or documents when available
+  🗣️ USE CLEAR LANGUAGE: Explain technical terms, avoid unnecessary jargon
+  📝 PROVIDE STEP-BY-STEP GUIDANCE: Break complex procedures into numbered steps
+  ⚠️ HIGHLIGHT CRITICAL INFORMATION: Emphasize important warnings or specifications
+  🔍 BE THOROUGH: Include relevant context like part numbers and compatibility
+  
+  Format responses for voice output - use natural speech patterns and clear transitions.
+
+# Manufacturing RAG specific settings
+MANUFACTURING_RAG:
+  BASE_URL: "https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev"
+  MODEL: "manufacturing-rag-demo"
+  VERBOSE: true
+
+# ===== AUDIO CONFIGURATION =====
+VOICE_INPUT_ON: true
+TTS_ON: true
+
+# ASR Configuration
+ASR_MODEL: "Faster-Whisper"
+ASR_LANGUAGE: "en"
+
+# TTS Configuration  
+TTS_MODEL: "EDGE_TTS"
+EDGE_TTS:
+  voice: "en-US-JennyNeural"
+  rate: "+0%"
+  pitch: "+0Hz"
+  volume: "+10%"
+  style: "professional"
+
+# ===== LIVE2D CONFIGURATION =====
+LIVE2D: true
+LIVE2D_MODEL: "default"
+
+# ===== WAKE WORD CONFIGURATION =====
+WAKE_WORD:
+  ENABLED: true
+  KEYWORDS: ["hey assistant", "technical help", "machine support", "safety check"]
+  SENSITIVITY: 0.7
+
+# ===== MANUFACTURING-SPECIFIC FEATURES =====
+MANUFACTURING_FEATURES:
+  SAFETY_PRIORITY: true
+  CONTEXT_EXTRACTION: true
+  VOICE_OPTIMIZED: true
+  TECHNICAL_VOCABULARY: true
+
+# ===== CONVERSATION SETTINGS =====
+MAX_HISTORY_CNT: 10
+REMOVE_SPECIAL_CHAR: true
+
+# ===== DEVELOPMENT SETTINGS =====
+# Set to false in production
+TRANSLATE_AUDIO: false
+CLIPBOARD_HISTORY: false

@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Live2D Assistant — minimal backend (HTTP /health + WebSocket echo + Claude HTTP), RAG infra optional.
+Description: Live2D Assistant — Enhanced backend with AWS Knowledge Base RAG integration
 
 Parameters:
   Env:
@@ -10,13 +10,18 @@ Parameters:
   EnableRagInfra:
     Type: String
     AllowedValues: ["true", "false"]
-    Default: "false"
-    Description: Set to "true" to also create OpenSearch and KB role (requires es/* and IAM permissions)
+    Default: "true"
+    Description: Set to "true" to create OpenSearch and KB role (requires es/* and IAM permissions)
 
   ModelId:
     Type: String
     Default: arn:aws:bedrock:us-west-2:615299772411:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0
     Description: Bedrock model/inference profile ARN
+
+  KnowledgeBaseName:
+    Type: String
+    Default: live2d-manufacturing-kb
+    Description: Name for the Bedrock Knowledge Base
 
 Conditions:
   CreateRagInfra: !Equals [!Ref EnableRagInfra, "true"]
@@ -69,13 +74,22 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt DocumentProcessorFn.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: manufacturing/
       Tags:
         - Key: Owner
           Value: Live2DAssistant
         - Key: Environment
           Value: !Ref Env
 
-  # ---------- (Optional) RAG Infra ----------
+  # ---------- Enhanced RAG Infrastructure ----------
   VectorSearchDomain:
     Type: AWS::OpenSearchService::Domain
     Condition: CreateRagInfra
@@ -104,6 +118,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: CreateRagInfra
     Properties:
+      RoleName: !Sub "BedrockKBRole-${Env}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -138,7 +153,7 @@ Resources:
                   - "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v1"
                   - "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2"
 
-  # ---------- Lambdas ----------
+  # ---------- Enhanced Lambda Functions ----------
   WSConnectionsFn:
     Type: AWS::Serverless::Function
     Properties:
@@ -170,28 +185,68 @@ Resources:
   OrchestratorFn:
     Type: AWS::Serverless::Function
     Properties:
-      Description: WS chat echo (stub) — streams two deltas + done
+      Description: WS chat orchestrator with RAG support
       Handler: index.lambda_handler
+      Timeout: 60
+      MemorySize: 1024
       InlineCode: |
-        import json, boto3
+        import json, boto3, os
+        from typing import List, Dict, Any
+
+        KNOWLEDGE_BASE_ID = os.environ.get("KNOWLEDGE_BASE_ID", "")
+        bedrock_agent = boto3.client("bedrock-agent-runtime") if KNOWLEDGE_BASE_ID else None
+
+        def retrieve_documents(query_text: str) -> List[Dict[str, Any]]:
+            if not bedrock_agent or not KNOWLEDGE_BASE_ID:
+                return []
+            try:
+                resp = bedrock_agent.retrieve(
+                    knowledgeBaseId=KNOWLEDGE_BASE_ID,
+                    retrievalQuery={"text": query_text},
+                    retrievalConfiguration={"vectorSearchConfiguration": {"numberOfResults": 3, "overrideSearchType": "HYBRID"}}
+                )
+                return [{"content": r["content"]["text"], "source": r["metadata"].get("source","Unknown"), "score": r["score"]} for r in resp.get("retrievalResults", [])]
+            except Exception as e:
+                print(f"[RAG] retrieve error: {e}")
+                return []
+
         def lambda_handler(event, context):
             rc = event["requestContext"]
             domain = f"https://{rc['domainName']}/{rc['stage']}"
             cid = rc["connectionId"]
             api = boto3.client("apigatewaymanagementapi", endpoint_url=domain)
+            
             body = json.loads(event.get("body") or "{}")
             txt = str(body.get("text") or "hello world")
-            mid = max(1, len(txt)//2)
-            api.post_to_connection(ConnectionId=cid, Data=json.dumps({"type":"assistant_text_delta","text":txt[:mid]}).encode())
-            api.post_to_connection(ConnectionId=cid, Data=json.dumps({"type":"assistant_text_delta","text":txt[mid:]}).encode())
+            enable_rag = body.get("enable_rag", bool(KNOWLEDGE_BASE_ID))
+            
+            # RAG enhancement
+            rag_context = ""
+            if enable_rag and txt:
+                docs = retrieve_documents(txt)
+                if docs:
+                    rag_context = f"Context: {docs[0]['content'][:200]}...\n\n"
+            
+            enhanced_text = rag_context + txt
+            mid = max(1, len(enhanced_text)//2)
+            
+            api.post_to_connection(ConnectionId=cid, Data=json.dumps({"type":"assistant_text_delta","text":enhanced_text[:mid]}).encode())
+            api.post_to_connection(ConnectionId=cid, Data=json.dumps({"type":"assistant_text_delta","text":enhanced_text[mid:]}).encode())
             api.post_to_connection(ConnectionId=cid, Data=json.dumps({"type":"assistant_done"}).encode())
             return {"statusCode": 200}
+      Environment:
+        Variables:
+          KNOWLEDGE_BASE_ID: ""  # Will be set after KB creation
       Policies:
         - AWSLambdaBasicExecutionRole
         - Statement:
             - Effect: Allow
               Action: execute-api:ManageConnections
               Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*/@connections/*
+            - Effect: Allow
+              Action:
+                - bedrock-agent:Retrieve
+              Resource: "*"
 
   HealthFunction:
     Type: AWS::Serverless::Function
@@ -215,7 +270,7 @@ Resources:
   ClaudeHttpFn:
     Type: AWS::Serverless::Function
     Properties:
-      Description: HTTP POST /claude → invoke Bedrock Anthropic Claude Sonnet (RAG optional via env)
+      Description: Enhanced HTTP POST /claude with AWS Knowledge Base RAG integration
       Handler: index.lambda_handler
       Timeout: 60
       MemorySize: 1024
@@ -231,82 +286,158 @@ Resources:
         bedrock_runtime = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
         bedrock_agent = boto3.client("bedrock-agent-runtime", region_name=BEDROCK_REGION) if KNOWLEDGE_BASE_ID else None
 
-        def retrieve_documents(query_text: str) -> List[Dict[str, Any]]:
+        def retrieve_documents(query_text: str, max_results: int = 5) -> List[Dict[str, Any]]:
             if not bedrock_agent or not KNOWLEDGE_BASE_ID:
                 return []
             try:
                 resp = bedrock_agent.retrieve(
                     knowledgeBaseId=KNOWLEDGE_BASE_ID,
                     retrievalQuery={"text": query_text},
-                    retrievalConfiguration={"vectorSearchConfiguration": {"numberOfResults": 5, "overrideSearchType": "HYBRID"}}
+                    retrievalConfiguration={
+                        "vectorSearchConfiguration": {
+                            "numberOfResults": max_results,
+                            "overrideSearchType": "HYBRID"
+                        }
+                    }
                 )
-                out=[]
+                results = []
                 for r in resp.get("retrievalResults", []):
-                    out.append({"content": r["content"]["text"], "source": r["metadata"].get("source","Unknown"), "score": r["score"]})
-                return out
+                    results.append({
+                        "content": r["content"]["text"],
+                        "source": r["metadata"].get("source", "Unknown"),
+                        "score": r["score"],
+                        "location": r.get("location", {})
+                    })
+                return results
             except Exception as e:
-                print("[RAG] retrieve error:", e)
+                print(f"[AWS KB] retrieve error: {e}")
                 return []
 
-        def enhance_prompt_with_context(q: str, docs: List[Dict[str, Any]]) -> str:
-            if not docs: return q
-            parts = ["RELEVANT MANUFACTURING DOCS:"]
-            for i,d in enumerate(docs,1):
-                parts.append(f"{i}. Source: {d['source']}")
-                parts.append(f"   Content: {d['content'][:500]}...")
-                parts.append("")
-            parts.append("QUESTION:"); parts.append(q)
-            return "\n".join(parts)
+        def enhance_prompt_with_context(query: str, docs: List[Dict[str, Any]]) -> str:
+            if not docs:
+                return query
+            
+            context_parts = ["=== RELEVANT MANUFACTURING DOCUMENTATION ==="]
+            for i, doc in enumerate(docs, 1):
+                context_parts.append(f"\n{i}. Source: {doc['source']} (Score: {doc['score']:.3f})")
+                context_parts.append(f"   Content: {doc['content'][:800]}...")
+                if len(doc['content']) > 800:
+                    context_parts.append("   [Content truncated]")
+            
+            context_parts.extend([
+                "\n=== END DOCUMENTATION ===",
+                "\nBased on the above documentation, please answer the following question:",
+                f"\nQuestion: {query}"
+            ])
+            
+            return "\n".join(context_parts)
 
         def lambda_handler(event, context):
-            headers = {"content-type":"application/json","Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type"}
+            headers = {
+                "content-type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
+            }
+            
             if event.get("requestContext", {}).get("http", {}).get("method") == "OPTIONS":
-                return {"statusCode":200,"headers":headers,"body":""}
+                return {"statusCode": 200, "headers": headers, "body": ""}
 
-            body = json.loads(event.get("body") or "{}")
-            text = (body.get("text") or "").strip()
-            system = body.get("system","You are a helpful manufacturing assistant with access to technical documentation.")
-            messages = body.get("messages", [])
-            image_data = body.get('image')
-            has_vision = body.get('has_vision', False)
-            enable_rag = body.get('enable_rag', bool(KNOWLEDGE_BASE_ID))
+            try:
+                body = json.loads(event.get("body") or "{}")
+                text = (body.get("text") or "").strip()
+                system = body.get("system", "You are a helpful manufacturing assistant with access to technical documentation.")
+                messages = body.get("messages", [])
+                image_data = body.get('image')
+                has_vision = body.get('has_vision', False)
+                enable_rag = body.get('enable_rag', bool(KNOWLEDGE_BASE_ID))
+                rag_mode = body.get('rag_mode', 'hybrid')  # hybrid, semantic, keyword
 
-            if not text and not messages:
-                return {"statusCode":400,"headers":headers,"body":json.dumps({"error":"Either `text` or `messages` is required"})}
+                if not text and not messages:
+                    return {"statusCode": 400, "headers": headers, "body": json.dumps({"error": "Either `text` or `messages` is required"})}
 
-            docs=[]; enhanced=text
-            if enable_rag and text and not has_vision:
-                docs = retrieve_documents(text)
-                if docs: enhanced = enhance_prompt_with_context(text, docs)
+                # RAG Enhancement
+                docs = []
+                enhanced_text = text
+                rag_sources = []
+                
+                if enable_rag and text and not has_vision:
+                    print(f"[AWS KB] Retrieving documents for query: {text[:100]}...")
+                    docs = retrieve_documents(text)
+                    if docs:
+                        enhanced_text = enhance_prompt_with_context(text, docs)
+                        rag_sources = [{"source": d["source"], "score": d["score"]} for d in docs]
+                        print(f"[AWS KB] Enhanced prompt with {len(docs)} documents")
+                    else:
+                        print("[AWS KB] No relevant documents found")
 
-            if has_vision and image_data:
-                content = [{"type":"text","text": text},
-                           {"type":"image","source":{"type":"base64","media_type":"image/jpeg","data": image_data}}]
-                bedrock_messages = [{"role":"user","content":content}]
-                max_tok=1500
-            else:
-                if enhanced and not messages:
-                    messages=[{"role":"user","content": enhanced}]
-                bedrock_messages=[{"role": m.get("role","user"), "content":[{"type":"text","text": m.get("content","")}]} for m in messages]
-                max_tok=MAX_TOKENS
+                # Prepare messages for Claude
+                if has_vision and image_data:
+                    content = [
+                        {"type": "text", "text": enhanced_text},
+                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_data}}
+                    ]
+                    bedrock_messages = [{"role": "user", "content": content}]
+                    max_tok = 1500
+                else:
+                    if enhanced_text and not messages:
+                        messages = [{"role": "user", "content": enhanced_text}]
+                    bedrock_messages = [
+                        {"role": m.get("role", "user"), "content": [{"type": "text", "text": m.get("content", "")}]}
+                        for m in messages
+                    ]
+                    max_tok = MAX_TOKENS
 
-            payload={"anthropic_version":"bedrock-2023-05-31","max_tokens": max_tok,"messages": bedrock_messages,"temperature":0.7}
-            if system: payload["system"]=system
+                # Call Claude
+                payload = {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": max_tok,
+                    "messages": bedrock_messages,
+                    "temperature": 0.7
+                }
+                if system:
+                    payload["system"] = system
 
-            resp = bedrock_runtime.invoke_model(modelId=MODEL_ID, contentType="application/json", accept="application/json", body=json.dumps(payload))
-            data = json.loads(resp["body"].read())
-            reply = data["content"][0]["text"]
+                print(f"[Claude] Calling model {MODEL_ID} with {len(bedrock_messages)} messages")
+                resp = bedrock_runtime.invoke_model(
+                    modelId=MODEL_ID,
+                    contentType="application/json",
+                    accept="application/json",
+                    body=json.dumps(payload)
+                )
+                
+                data = json.loads(resp["body"].read())
+                reply = data["content"][0]["text"]
 
-            if docs and any(("safety" in d["source"].lower()) or ("critical" in d["content"].lower()) for d in docs):
-                reply = "⚠️ SAFETY NOTICE: This response contains safety-critical information. Follow all safety protocols.\n\n" + reply
+                # Add safety notice for critical information
+                if docs and any(("safety" in d["source"].lower()) or ("critical" in d["content"].lower()) for d in docs):
+                    reply = "⚠️ SAFETY NOTICE: This response contains safety-critical information. Follow all safety protocols.\n\n" + reply
 
-            return {"statusCode":200,"headers":headers,"body":json.dumps({"reply": reply,"sources_used": len(docs),"rag_enabled": bool(KNOWLEDGE_BASE_ID) and len(docs)>0,"retrieved_sources": [d["source"] for d in docs]})}
+                response_data = {
+                    "reply": reply,
+                    "sources_used": len(docs),
+                    "rag_enabled": bool(KNOWLEDGE_BASE_ID) and enable_rag,
+                    "knowledge_base_id": KNOWLEDGE_BASE_ID if docs else None,
+                    "retrieved_sources": rag_sources,
+                    "has_vision": has_vision,
+                    "model_used": MODEL_ID
+                }
+
+                return {"statusCode": 200, "headers": headers, "body": json.dumps(response_data)}
+
+            except Exception as e:
+                print(f"[Error] {str(e)}")
+                return {
+                    "statusCode": 500,
+                    "headers": headers,
+                    "body": json.dumps({"error": f"Internal server error: {str(e)}"})
+                }
       Environment:
         Variables:
           MODEL_ID: !Ref ModelId
           BEDROCK_REGION: !Ref AWS::Region
           MAX_TOKENS: "2048"
-          KNOWLEDGE_BASE_ID: ""              # leave empty until RAG infra is enabled/created
+          KNOWLEDGE_BASE_ID: ""  # Will be set after KB creation
           DOCUMENTS_BUCKET: !Ref DocumentsBucket
       Policies:
         - AWSLambdaBasicExecutionRole
@@ -314,6 +445,7 @@ Resources:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
+                - bedrock-agent:Retrieve
               Resource: "*"
             - Effect: Allow
               Action:
@@ -335,6 +467,70 @@ Resources:
             ApiId: !Ref HttpApi
             Method: OPTIONS
             Path: /claude
+
+  # Document Processing Function
+  DocumentProcessorFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Processes uploaded documents and triggers KB sync
+      Handler: index.lambda_handler
+      Timeout: 300
+      MemorySize: 512
+      InlineCode: |
+        import json, boto3, os
+        from urllib.parse import unquote_plus
+
+        KNOWLEDGE_BASE_ID = os.environ.get("KNOWLEDGE_BASE_ID", "")
+        DATA_SOURCE_ID = os.environ.get("DATA_SOURCE_ID", "")
+
+        bedrock_agent = boto3.client("bedrock-agent") if KNOWLEDGE_BASE_ID and DATA_SOURCE_ID else None
+
+        def lambda_handler(event, context):
+            print(f"Document processor triggered: {json.dumps(event)}")
+            
+            for record in event.get('Records', []):
+                if record.get('eventSource') == 'aws:s3':
+                    bucket = record['s3']['bucket']['name']
+                    key = unquote_plus(record['s3']['object']['key'])
+                    
+                    print(f"Processing document: s3://{bucket}/{key}")
+                    
+                    # Trigger Knowledge Base sync if configured
+                    if bedrock_agent and KNOWLEDGE_BASE_ID and DATA_SOURCE_ID:
+                        try:
+                            response = bedrock_agent.start_ingestion_job(
+                                knowledgeBaseId=KNOWLEDGE_BASE_ID,
+                                dataSourceId=DATA_SOURCE_ID,
+                                description=f"Auto-sync triggered by upload of {key}"
+                            )
+                            print(f"Started ingestion job: {response['ingestionJob']['ingestionJobId']}")
+                        except Exception as e:
+                            print(f"Failed to start ingestion job: {e}")
+                    else:
+                        print("Knowledge Base not configured, skipping sync")
+            
+            return {"statusCode": 200}
+      Environment:
+        Variables:
+          KNOWLEDGE_BASE_ID: ""  # Will be set after KB creation
+          DATA_SOURCE_ID: ""     # Will be set after data source creation
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock-agent:StartIngestionJob
+                - bedrock-agent:GetIngestionJob
+              Resource: "*"
+
+  # S3 Bucket Permission for Lambda
+  DocumentProcessorPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DocumentProcessorFn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt DocumentsBucket.Arn
 
   # ---------- APIs ----------
   WebSocketApi:
@@ -451,3 +647,6 @@ Outputs:
     Condition: CreateRagInfra
     Description: IAM Role ARN for Bedrock Knowledge Base (only if RAG enabled)
     Value: !GetAtt BedrockKBRole.Arn
+  KnowledgeBaseName:
+    Description: Suggested name for the Knowledge Base
+    Value: !Ref KnowledgeBaseName

@@ -22,7 +22,7 @@ class LLM(LLMInterface):
             llm_api_key (str): Not used with AWS endpoint, kept for compatibility
             verbose (bool): Whether to print debug info
         """
-        self.system = system
+        self.system = self._enhance_system_prompt(system) if system else None
         self.model = model
         self.verbose = verbose
         self.base_url = base_url
@@ -32,6 +32,20 @@ class LLM(LLMInterface):
         
         # Store conversation history (excluding system prompt)
         self.messages = []
+    
+    def _enhance_system_prompt(self, original_system: str) -> str:
+        """Enhance the system prompt to be more intelligent about responses"""
+        enhancement = """
+
+IMPORTANT RESPONSE GUIDELINES:
+- When you don't know something specific, say so clearly and suggest alternatives
+- Don't provide generic lists of information unless specifically asked
+- Be contextual and relevant to the user's actual question
+- If asked about unknown error codes or specific issues, acknowledge the limitation and provide helpful next steps
+- Keep responses focused and conversational, not like reading from a manual
+- Only provide detailed technical information when specifically requested
+"""
+        return original_system + enhancement
 
     def _normalize_message_content(self, content: Union[str, List[Dict], Dict]) -> Union[str, List[Dict]]:
         """

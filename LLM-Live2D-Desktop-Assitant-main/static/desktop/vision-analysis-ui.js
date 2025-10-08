@@ -62,6 +62,10 @@ class VisionAnalysisUI {
                         <button id="start-camera-btn" class="secondary-btn">
                             🎥 Start Camera
                         </button>
+                        <button id="upload-image-btn" class="upload-btn">
+                            📁 Upload Image
+                        </button>
+                        <input type="file" id="image-file-input" accept="image/*" style="display: none;">
                     </div>
                     
                     <div class="control-group">
@@ -127,6 +131,8 @@ class VisionAnalysisUI {
             toggleBtn: document.getElementById('vision-toggle'),
             analyzeBtn: document.getElementById('analyze-object-btn'),
             startCameraBtn: document.getElementById('start-camera-btn'),
+            uploadBtn: document.getElementById('upload-image-btn'),
+            fileInput: document.getElementById('image-file-input'),
             captureMode: document.getElementById('capture-mode'),
             cameraSelect: document.getElementById('camera-select'),
             status: document.getElementById('analysis-status'),
@@ -224,6 +230,10 @@ class VisionAnalysisUI {
                 background: #FF9800;
             }
             
+            .upload-btn {
+                background: #9C27B0;
+            }
+            
             .action-btn {
                 background: #2196F3;
                 padding: 5px 8px;
@@ -241,6 +251,10 @@ class VisionAnalysisUI {
             
             .secondary-btn:hover {
                 background: #F57C00;
+            }
+            
+            .upload-btn:hover {
+                background: #7B1FA2;
             }
             
             .action-btn:hover {
@@ -425,6 +439,15 @@ class VisionAnalysisUI {
         // Camera controls
         this.elements.startCameraBtn.addEventListener('click', () => {
             this.toggleCamera();
+        });
+        
+        // Upload controls
+        this.elements.uploadBtn.addEventListener('click', () => {
+            this.elements.fileInput.click();
+        });
+        
+        this.elements.fileInput.addEventListener('change', (e) => {
+            this.handleImageUpload(e);
         });
         
         // Analysis trigger
@@ -773,12 +796,19 @@ class VisionAnalysisUI {
             // Set new message handler
             window.ws.onmessage = responseHandler;
             
+            // Check if we're in manufacturing mode
+            const isManufacturingMode = this.isManufacturingMode();
+            const userQuestion = isManufacturingMode ?
+                'Analyze this equipment or error display for manufacturing defects, error codes, and maintenance issues.' :
+                'What is this object? Can you analyze it?';
+
             // Send analysis request
             const requestMessage = {
                 type: 'object-analysis-request',
                 analysisId: analysisId,
                 imageData: imageData.split(',')[1], // Remove data URL prefix
-                userQuestion: 'What is this object? Can you analyze it?',
+                userQuestion: userQuestion,
+                manufacturingMode: isManufacturingMode,
                 timestamp: Date.now()
             };
             
@@ -1021,14 +1051,150 @@ class VisionAnalysisUI {
     }
 
     /**
+     * Handle image file upload
+     * @param {Event} event - File input change event
+     */
+    async handleImageUpload(event) {
+        try {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            console.log('[VisionAnalysisUI] Processing uploaded image:', file.name);
+            this.updateStatus('Processing uploaded image...', 'processing');
+
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                throw new Error('Please select a valid image file');
+            }
+
+            // Validate file size (max 10MB)
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            if (file.size > maxSize) {
+                throw new Error('Image file is too large. Please select a file smaller than 10MB');
+            }
+
+            // Convert file to base64 data URL
+            const imageData = await this.fileToDataURL(file);
+            
+            // Display the uploaded image in preview
+            this.showUploadedImage(imageData);
+            
+            // Start analysis
+            await this.sendForAnalysis(imageData);
+            
+            // Clear the file input for next upload
+            event.target.value = '';
+            
+        } catch (error) {
+            console.error('[VisionAnalysisUI] Image upload failed:', error);
+            this.updateStatus(`Upload failed: ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Convert file to data URL
+     * @param {File} file - File object
+     * @returns {Promise<string>} - Data URL string
+     */
+    fileToDataURL(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = (e) => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    /**
+     * Display uploaded image in preview
+     * @param {string} imageData - Base64 image data
+     */
+    showUploadedImage(imageData) {
+        try {
+            // Show preview container
+            this.elements.previewContainer.classList.remove('hidden');
+            
+            // Create image element to get dimensions
+            const img = new Image();
+            img.onload = () => {
+                // Set canvas size to match image
+                this.elements.previewCanvas.width = Math.min(img.width, 400);
+                this.elements.previewCanvas.height = Math.min(img.height, 300);
+                
+                // Draw image on canvas
+                const ctx = this.elements.previewCanvas.getContext('2d');
+                ctx.clearRect(0, 0, this.elements.previewCanvas.width, this.elements.previewCanvas.height);
+                ctx.drawImage(img, 0, 0, this.elements.previewCanvas.width, this.elements.previewCanvas.height);
+                
+                console.log('[VisionAnalysisUI] Uploaded image displayed in preview');
+            };
+            img.src = imageData;
+            
+        } catch (error) {
+            console.error('[VisionAnalysisUI] Failed to display uploaded image:', error);
+        }
+    }
+
+    /**
      * Get current UI state
      */
+    /**
+     * Check if we're running in manufacturing mode
+     * @returns {boolean} - True if manufacturing mode is active
+     */
+    isManufacturingMode() {
+        // Check URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('mode') === 'manufacturing') {
+            return true;
+        }
+        
+        // Check if manufacturing-specific elements are present
+        const manufacturingIndicators = [
+            'manufacturing_assistant',
+            'manufacturing_rag',
+            'error_analysis',
+            'quality_control'
+        ];
+        
+        // Check page title or other indicators
+        const pageTitle = document.title.toLowerCase();
+        const bodyClasses = document.body.className.toLowerCase();
+        
+        return manufacturingIndicators.some(indicator =>
+            pageTitle.includes(indicator) || bodyClasses.includes(indicator)
+        );
+    }
+
+    /**
+     * Update status with manufacturing mode indicator
+     * @param {string} message - Status message
+     * @param {string} type - Status type
+     */
+    updateStatus(message, type = 'info') {
+        const statusElement = this.elements.status;
+        if (!statusElement) return;
+        
+        // Add manufacturing mode indicator if active
+        const isManufacturing = this.isManufacturingMode();
+        const prefix = isManufacturing ? '🏭 [Manufacturing Mode] ' : '';
+        
+        statusElement.textContent = prefix + message;
+        statusElement.className = `status-indicator ${type}`;
+        
+        // Add manufacturing-specific styling
+        if (isManufacturing) {
+            statusElement.style.borderLeft = '3px solid #FF9800';
+        }
+    }
+
     getState() {
         return {
             isInitialized: this.isInitialized,
             analysisInProgress: this.analysisInProgress,
             historyCount: this.analysisHistory.length,
-            lastAnalysisTime: this.lastAnalysis ? this.lastAnalysis.timestamp : null
+            lastAnalysisTime: this.lastAnalysis ? this.lastAnalysis.timestamp : null,
+            manufacturingMode: this.isManufacturingMode()
         };
     }
 }

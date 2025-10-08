@@ -1,0 +1,98 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "aoss:CreateSecurityPolicy",
+        "aoss:GetSecurityPolicy",
+        "aoss:ListSecurityPolicies",
+        "aoss:UpdateSecurityPolicy",
+        "aoss:CreateAccessPolicy",
+        "aoss:GetAccessPolicy",
+        "aoss:ListAccessPolicies",
+        "aoss:UpdateAccessPolicy",
+        "aoss:CreateCollection",
+        "aoss:BatchGetCollection",
+        "aoss:ListCollections",
+        "aoss:UpdateCollection",
+        "aoss:DeleteCollection"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:CreateKnowledgeBase",
+        "bedrock:GetKnowledgeBase",
+        "bedrock:ListKnowledgeBases",
+        "bedrock:UpdateKnowledgeBase",
+        "bedrock:DeleteKnowledgeBase",
+        "bedrock:CreateDataSource",
+        "bedrock:GetDataSource",
+        "bedrock:ListDataSources",
+        "bedrock:UpdateDataSource",
+        "bedrock:DeleteDataSource",
+        "bedrock:StartIngestionJob",
+        "bedrock:GetIngestionJob",
+        "bedrock:ListIngestionJobs",
+        "bedrock:InvokeModel",
+        "bedrock:ListFoundationModels"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agent:CreateKnowledgeBase",
+        "bedrock-agent:GetKnowledgeBase",
+        "bedrock-agent:ListKnowledgeBases",
+        "bedrock-agent:UpdateKnowledgeBase",
+        "bedrock-agent:DeleteKnowledgeBase",
+        "bedrock-agent:CreateDataSource",
+        "bedrock-agent:GetDataSource",
+        "bedrock-agent:ListDataSources",
+        "bedrock-agent:UpdateDataSource",
+        "bedrock-agent:DeleteDataSource",
+        "bedrock-agent:StartIngestionJob",
+        "bedrock-agent:GetIngestionJob",
+        "bedrock-agent:ListIngestionJobs",
+        "bedrock-agent:Retrieve"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": [
+        "arn:aws:s3:::live2d-aws-backend-documentsbucket-gvqh2hzqj761",
+        "arn:aws:s3:::live2d-aws-backend-documentsbucket-gvqh2hzqj761/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:GetRole",
+        "iam:PutRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::615299772411:role/BedrockKnowledgeBaseRole"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

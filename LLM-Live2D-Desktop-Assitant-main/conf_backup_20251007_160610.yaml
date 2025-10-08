@@ -1,0 +1,69 @@
+# SIMPLIFIED WORKING CONFIGURATION
+# Focus: Get TTS/STT working first!
+
+# Basic Settings
+VOICE_INPUT_ON: true
+TTS_ON: true
+TRANSLATE_AUDIO: false
+LIVE2D: true
+SAY_GREETING: false
+VERBOSE: true
+
+# Speech Recognition (STT)
+ASR_MODEL: Faster-Whisper
+Faster-Whisper:
+  model_size: base
+  model_path: base
+  device: cpu
+  compute_type: int8
+  language: en
+  
+# Text-to-Speech (TTS)  
+TTS_MODEL: EDGE_TTS
+
+EDGE_TTS:
+  voice: en-US-JennyNeural   # examples: en-US-GuyNeural, en-GB-LibbyNeural, pa-IN-NeerjaNeural
+  rate: "+0%"
+  pitch: "+0Hz"
+  volume: "+0%"
+  # style: "cheerful"        # optional, voice-dependent
+  
+# LLM Settings - Use local test mode first
+LLM_PROVIDER: claude
+claude:
+  # AWS Bedrock endpoint - Claude 3.7 Sonnet for enhanced performance
+  BASE_URL: "https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev"
+  MODEL: "anthropic.claude-3-7-sonnet-20250219-v1:0"
+  
+# Simple persona
+PERSONA_CHOICE: "service_assistant"
+SYSTEM_PROMPT: "You are a helpful AI assistant. Keep responses brief and friendly."
+
+# Performance Settings
+MAX_TOKENS: 500
+RESPONSE_TIMEOUT: 30
+
+# Disable complex features for now
+MEMORY: false
+SEARCH_GOOGLE: false
+OPEN_WEBSITES: false
+TAKE_SCREENSHOT: false
+CONTROL_COMPUTER: false
+
+# Voice settings
+MIC_IN_BROWSER: false
+AUDIO_INPUT_DEVICE: null  # Use default
+AUDIO_OUTPUT_DEVICE: null  # Use default
+
+# Live2D Model
+LIVE2D_MODEL: "default"
+LIVE2D_Expression_Prompt: "live2d_expression_prompt"
+
+# Wake word - disabled for testing
+WAKE_UP_WORD_ON: false
+
+# Server settings - STANDARDIZED PORT CONFIGURATION
+# Fixed port 8000 for reliable frontend/backend connection via Vite proxy
+# This replaces the dynamic port allocation system for better development experience
+SERVER_PORT: 8000
+WEBSOCKET_PORT: 8000  # Same port for HTTP and WebSocket

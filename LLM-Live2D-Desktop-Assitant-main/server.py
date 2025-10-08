@@ -25,6 +25,23 @@ from tts.stream_audio import AudioPayloadPreparer
 from port_config import get_available_port, cleanup_ports, get_current_port
 import argparse
 
+# Import RAG functionality for manufacturing mode
+try:
+    from demo_rag_client import DemoManufacturingRAG, ManufacturingContext
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
+    print("[RAG] Warning: RAG functionality not available")
+
+# Import Simple S3 RAG for Claude integration
+try:
+    from simple_s3_rag import SimpleS3RAG
+    S3_RAG_AVAILABLE = True
+    print("[RAG] Simple S3 RAG system available")
+except ImportError:
+    S3_RAG_AVAILABLE = False
+    print("[RAG] Warning: Simple S3 RAG not available")
+
 
 def find_available_port(start_port: int = 1025, max_attempts: int = 25) -> int:
     """
@@ -58,6 +75,93 @@ def find_available_port(start_port: int = 1025, max_attempts: int = 25) -> int:
     logger.error(f"All ports in range {start_port}-{start_port + max_attempts - 1} are in use: {sorted(used_ports)}")
     raise RuntimeError(f"Could not find an available port after {max_attempts} attempts in range {start_port}-{start_port + max_attempts - 1}")
 
+
+def load_rag_context_for_vision(user_question: str = "", image_analysis_preview: str = "") -> str:
+    """Load RAG context for manufacturing vision analysis"""
+    if not RAG_AVAILABLE:
+        return ""
+    
+    try:
+        # Initialize RAG client
+        rag_client = DemoManufacturingRAG()
+        
+        # Create search query from user question and any initial image analysis
+        search_query = f"{user_question} {image_analysis_preview}".strip()
+        if not search_query:
+            search_query = "manufacturing error analysis equipment defect"
+        
+        # Get relevant context from RAG
+        context = rag_client.get_context(search_query)
+        
+        if context and hasattr(context, 'relevant_docs') and context.relevant_docs:
+            rag_context = "\n\n=== MANUFACTURING KNOWLEDGE BASE ===\n"
+            rag_context += "Based on your manufacturing documentation, here is relevant context:\n\n"
+            
+            for doc in context.relevant_docs[:3]:  # Use top 3 most relevant documents
+                rag_context += f"• {doc.get('content', '')[:500]}...\n\n"
+            
+            rag_context += "=== END KNOWLEDGE BASE ===\n\n"
+            return rag_context
+        
+    except Exception as e:
+        print(f"[RAG] Warning: Could not load RAG context: {e}")
+    
+    return ""
+
+def is_manufacturing_mode(config: dict) -> bool:
+    """Check if the system is running in manufacturing mode"""
+    llm_provider = config.get('LLM_PROVIDER', '').lower()
+    persona = config.get('PERSONA_CHOICE', '').lower()
+    
+    return ('manufacturing' in llm_provider or
+            'manufacturing' in persona or
+            llm_provider == 'manufacturing_rag')
+
+def load_local_rag_documents() -> str:
+    """Load local RAG documents as fallback"""
+    try:
+        import json
+        from pathlib import Path
+        
+        # Try to load the local RAG index
+        index_file = Path("rag_documents_index.json")
+        if index_file.exists():
+            with open(index_file, 'r', encoding='utf-8') as f:
+                index_data = json.load(f)
+            
+            documents = index_data.get('documents', [])
+            if documents:
+                context = "\n\n=== MANUFACTURING DOCUMENTATION ===\n"
+                context += "Relevant manufacturing error documentation:\n\n"
+                
+                # Include relevant documents (limit to avoid token overflow)
+                for doc in documents[:2]:  # Use first 2 documents
+                    title = doc.get('title', 'Manufacturing Documentation')
+                    content = doc.get('content', '')[:1000]  # Limit content length
+                    context += f"**{title}**\n{content}...\n\n"
+                
+                context += "=== END DOCUMENTATION ===\n\n"
+                return context
+        
+        # Fallback: Load documents directly from rag_documents folder
+        rag_dir = Path("rag_documents")
+        if rag_dir.exists():
+            context = "\n\n=== MANUFACTURING KNOWLEDGE ===\n"
+            
+            # Load heater error documentation specifically
+            heater_doc = rag_dir / "heater_error_103_documentation.md"
+            if heater_doc.exists():
+                with open(heater_doc, 'r', encoding='utf-8') as f:
+                    content = f.read()[:2000]  # Limit to avoid token overflow
+                    context += f"Heater Error Documentation:\n{content}...\n\n"
+            
+            context += "=== END KNOWLEDGE ===\n\n"
+            return context
+            
+    except Exception as e:
+        print(f"[RAG] Warning: Could not load local RAG documents: {e}")
+    
+    return ""
 
 def _create_concise_vision_summary(full_response: str, user_question: str) -> str:
     """
@@ -408,39 +512,141 @@ class WebSocketServer:
 
         @self.app.post("/claude")
         async def claude_endpoint(request: ClaudeRequest):
-            """Claude API endpoint - Proxy to AWS Claude API"""
+            """Claude API endpoint with RAG enhancement - calls actual AWS Claude API"""
             logger.info(f"Claude request: {request.text[:50]}...")
             
             try:
-                # Use the existing OpenLLMVTuberMain to handle Claude requests
-                # This ensures we use the same Claude configuration as the WebSocket interface
-                if hasattr(self, 'open_llm_vtuber_main_config'):
-                    claude_config = self.open_llm_vtuber_main_config.get('claude', {})
-                    base_url = claude_config.get('BASE_URL')
-                    model = claude_config.get('MODEL')
-                    
-                    if base_url and model:
-                        # For now, return a mock response that matches the expected format
-                        # TODO: Implement actual AWS Claude API call
-                        return {
-                            "reply": f"Mock Claude response to: {request.text}. (AWS endpoint: {base_url}, Model: {model})",
-                            "status": "success",
-                            "tokens_used": len(request.text.split()) * 2
-                        }
+                # Get RAG context if available
+                rag_context = ""
+                relevant_chunks = []
+                if S3_RAG_AVAILABLE:
+                    try:
+                        logger.info("[RAG] Attempting to get relevant context from S3...")
+                        rag_system = SimpleS3RAG()
+                        relevant_chunks = rag_system.retrieve_relevant_chunks(request.text, max_chunks=2)
+                        
+                        if relevant_chunks:
+                            logger.info(f"[RAG] Found {len(relevant_chunks)} relevant chunks")
+                            context_parts = []
+                            for chunk in relevant_chunks:
+                                source_name = chunk.source.split('/')[-1].replace('.txt', '').replace('-', ' ').title()
+                                context_parts.append(f"From {source_name}: {chunk.content[:300]}...")
+                            
+                            rag_context = "\n\n=== RELEVANT INFORMATION FROM KNOWLEDGE BASE ===\n"
+                            rag_context += "\n\n".join(context_parts)
+                            rag_context += "\n=== END KNOWLEDGE BASE ===\n\n"
+                            
+                            logger.info("[RAG] Successfully added context to Claude request")
+                        else:
+                            logger.info("[RAG] No relevant context found")
+                    except Exception as rag_error:
+                        logger.warning(f"[RAG] Error getting context: {rag_error}")
+                        rag_context = ""
                 
-                # Fallback mock response
-                return {
-                    "reply": f"Mock Claude response to: {request.text}",
-                    "status": "success",
-                    "tokens_used": len(request.text.split()) * 2
-                }
+                # Enhance the request text with RAG context
+                enhanced_text = request.text + rag_context if rag_context else request.text
+                
+                # Call actual AWS Claude API using boto3
+                try:
+                    import boto3
+                    import json as json_lib
+                    
+                    # Initialize AWS Bedrock client
+                    bedrock_client = boto3.client('bedrock-runtime', region_name='us-west-2')
+                    
+                    # Prepare the Claude request payload
+                    claude_payload = {
+                        "anthropic_version": "bedrock-2023-05-31",
+                        "max_tokens": request.max_tokens,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": enhanced_text
+                            }
+                        ]
+                    }
+                    
+                    # Get model ID from config or use default inference profile ARN
+                    # Use inference profile ARN instead of direct model ID to avoid ValidationException
+                    model_id = "arn:aws:bedrock:us-west-2:anthropic.claude-3-7-sonnet-20250219-v1:0"  # Default inference profile
+                    
+                    if hasattr(self, 'open_llm_vtuber_main_config'):
+                        claude_config = self.open_llm_vtuber_main_config.get('claude', {})
+                        configured_model = claude_config.get('MODEL', '')
+                        
+                        # If the configured model is already an ARN, use it directly
+                        if configured_model.startswith('arn:aws:bedrock:'):
+                            model_id = configured_model
+                        # If it's a model ID, convert it to inference profile ARN format
+                        elif configured_model:
+                            # Extract region from configured model or default to us-west-2
+                            region = 'us-west-2'  # Default region
+                            model_id = f"arn:aws:bedrock:{region}:{configured_model}"
+                        # Otherwise use the default ARN
+                    
+                    logger.info(f"[AWS] Calling Claude API with model: {model_id}")
+                    
+                    # Call AWS Bedrock Claude API
+                    response = bedrock_client.invoke_model(
+                        modelId=model_id,
+                        body=json_lib.dumps(claude_payload),
+                        contentType='application/json'
+                    )
+                    
+                    # Parse the response
+                    response_body = json_lib.loads(response['body'].read())
+                    
+                    if 'content' in response_body and len(response_body['content']) > 0:
+                        claude_response = response_body['content'][0]['text']
+                        tokens_used = response_body.get('usage', {}).get('input_tokens', 0) + response_body.get('usage', {}).get('output_tokens', 0)
+                        
+                        logger.info(f"[AWS] Claude API response received: {len(claude_response)} chars")
+                        
+                        return {
+                            "reply": claude_response,
+                            "status": "success",
+                            "tokens_used": tokens_used,
+                            "rag_enhanced": bool(rag_context),
+                            "context_chunks": len(relevant_chunks)
+                        }
+                    else:
+                        logger.error("[AWS] Invalid response format from Claude API")
+                        return {
+                            "reply": "Error: Invalid response format from Claude API",
+                            "status": "error",
+                            "tokens_used": 0,
+                            "rag_enhanced": bool(rag_context),
+                            "context_chunks": len(relevant_chunks)
+                        }
+                        
+                except Exception as aws_error:
+                    logger.error(f"[AWS] Error calling Claude API: {aws_error}")
+                    
+                    # Fallback to mock response with RAG context if AWS fails
+                    response_text = f"I understand you're asking about: {request.text}"
+                    if rag_context:
+                        response_text += f"\n\nBased on the information I found in your knowledge base:\n{rag_context}"
+                        response_text += "\n\nNote: This response includes information from your documents, but I'm currently unable to access the full Claude API. Please check your AWS configuration."
+                    else:
+                        response_text += "\n\nI don't have specific information about this in my knowledge base. Please check your AWS configuration for full Claude API access."
+                    
+                    return {
+                        "reply": response_text,
+                        "status": "partial_success",
+                        "tokens_used": len(enhanced_text.split()) * 2,
+                        "rag_enhanced": bool(rag_context),
+                        "context_chunks": len(relevant_chunks),
+                        "error": f"AWS API error: {str(aws_error)}"
+                    }
                 
             except Exception as e:
                 logger.error(f"Claude endpoint error: {e}")
                 return {
                     "reply": f"Error processing request: {str(e)}",
                     "status": "error",
-                    "tokens_used": 0
+                    "tokens_used": 0,
+                    "rag_enhanced": False,
+                    "context_chunks": 0
                 }
 
         # WebSocket echo endpoint for testing
@@ -738,8 +944,60 @@ class WebSocketServer:
                                     clean_image_data = image_data.split(',')[1]
                                     print(f"[VISION FIX] Cleaned image data: {len(clean_image_data)} chars")
                                 
-                                # Create vision-specific prompt
-                                vision_prompt = f"""Please analyze this image and answer the user's question: "{user_question}"
+                                # Check if we're in manufacturing mode and load RAG context
+                                rag_context = ""
+                                try:
+                                    # Load configuration to check if we're in manufacturing mode
+                                    config_file = "conf.yaml"
+                                    if os.path.exists(config_file):
+                                        # Handle encoding issues with config file
+                                        config = None
+                                        for encoding in ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252']:
+                                            try:
+                                                with open(config_file, 'r', encoding=encoding) as f:
+                                                    config = yaml.safe_load(f)
+                                                break
+                                            except UnicodeDecodeError:
+                                                continue
+                                        
+                                        if config is None:
+                                            print(f"[RAG] Warning: Could not read config file with any encoding")
+                                            config = {}
+                                        
+                                        if is_manufacturing_mode(config):
+                                            print(f"[RAG] Manufacturing mode detected - loading RAG context")
+                                            
+                                            # Try to load RAG context
+                                            rag_context = load_rag_context_for_vision(user_question, "")
+                                            
+                                            # Fallback to local documents if RAG not available
+                                            if not rag_context:
+                                                rag_context = load_local_rag_documents()
+                                            
+                                            if rag_context:
+                                                print(f"[RAG] Loaded {len(rag_context)} chars of manufacturing context")
+                                            else:
+                                                print(f"[RAG] No manufacturing context available")
+                                except Exception as e:
+                                    print(f"[RAG] Error loading manufacturing context: {e}")
+
+                                # Create vision-specific prompt with optional RAG context
+                                if rag_context:
+                                    vision_prompt = f"""{rag_context}
+
+You are a specialized manufacturing assistant analyzing equipment and error displays. Please analyze this image and answer the user's question: "{user_question}"
+
+Using your manufacturing knowledge base above, provide a detailed analysis including:
+1. What objects, equipment, or error displays you can see
+2. Any error codes, warning messages, or status indicators
+3. Equipment type and manufacturer if identifiable
+4. Severity level and safety considerations
+5. Recommended troubleshooting steps or actions
+6. Relevant documentation references from your knowledge base
+
+Focus on manufacturing, quality control, and equipment maintenance aspects. Be specific about error codes, safety protocols, and maintenance procedures."""
+                                else:
+                                    vision_prompt = f"""Please analyze this image and answer the user's question: "{user_question}"
 
 Provide a detailed analysis including:
 1. What objects you can see in the image

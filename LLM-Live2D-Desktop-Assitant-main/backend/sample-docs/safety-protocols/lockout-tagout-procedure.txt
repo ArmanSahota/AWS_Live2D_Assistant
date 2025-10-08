@@ -1,0 +1,73 @@
+LOCKOUT/TAGOUT PROCEDURE - MANUFACTURING SAFETY PROTOCOL
+
+Document ID: SP-001
+Revision: 3.2
+Date: 2024-01-15
+Department: Safety & Compliance
+
+OVERVIEW
+========
+This procedure establishes the minimum requirements for the lockout of energy isolating devices whenever maintenance or servicing is done on machines or equipment.
+
+SCOPE
+=====
+This procedure applies to all manufacturing equipment including:
+- CNC machines (Models: PL1-CNC-001, PL2-CNC-002, PL3-CNC-003)
+- Assembly line conveyors
+- Hydraulic presses
+- Robotic systems
+- Packaging equipment
+
+ENERGY SOURCES
+==============
+The following energy sources must be controlled:
+1. Electrical energy
+2. Mechanical energy (springs, elevated machine members, rotating flywheels)
+3. Hydraulic energy
+4. Pneumatic energy
+5. Chemical energy
+6. Thermal energy
+
+LOCKOUT PROCEDURE
+=================
+1. PREPARATION
+   - Notify all affected employees
+   - Identify all energy sources
+   - Shut down equipment using normal stopping procedures
+
+2. ISOLATION
+   - Locate and operate all energy isolating devices
+   - Dissipate or restrain stored energy
+   - Verify isolation by testing controls
+
+3. LOCKOUT/TAGOUT
+   - Apply lockout devices to energy isolating devices
+   - Attach tags identifying the employee and reason for lockout
+   - Ensure each employee applies their own lock
+
+4. VERIFICATION
+   - Attempt to start equipment to verify effective isolation
+   - Return controls to neutral position after verification
+
+REMOVAL PROCEDURE
+=================
+1. Inspect work area to ensure tools are removed
+2. Check that all employees are clear of equipment
+3. Verify controls are in neutral position
+4. Remove lockout/tagout devices (only by person who applied them)
+5. Re-energize equipment
+
+EMERGENCY CONTACT
+=================
+Safety Manager: Ext. 2911
+Maintenance Supervisor: Ext. 2922
+Emergency Services: 911
+
+TRAINING REQUIREMENTS
+====================
+All employees must complete LOTO training before working on equipment.
+Annual refresher training is mandatory.
+
+⚠️ CRITICAL SAFETY WARNING ⚠️
+Failure to follow this procedure may result in serious injury or death.
+Never remove another person's lock or tag.

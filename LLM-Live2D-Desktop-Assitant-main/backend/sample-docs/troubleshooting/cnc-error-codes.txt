@@ -1,0 +1,119 @@
+CNC MACHINE ERROR CODES - TROUBLESHOOTING GUIDE
+
+Document ID: TG-002
+Machine Models: PL1-CNC-001, PL2-CNC-002, PL3-CNC-003
+Revision: 2.1
+Date: 2024-01-10
+Department: Maintenance
+
+COMMON ERROR CODES
+==================
+
+E001 - SPINDLE OVERLOAD
+-----------------------
+Symptoms: Spindle stops during operation, alarm sounds
+Causes:
+- Excessive cutting load
+- Dull cutting tool
+- Incorrect feed rate
+- Material hardness exceeds specifications
+
+Troubleshooting Steps:
+1. Stop machine immediately using emergency stop
+2. Check cutting tool condition - replace if worn
+3. Reduce feed rate by 25%
+4. Verify material specifications match job requirements
+5. Check spindle motor temperature
+6. Reset alarm and restart operation
+
+Parts Required: Cutting tools (Part #: CT-HSS-001 to CT-HSS-020)
+
+E002 - AXIS SERVO ERROR
+-----------------------
+Symptoms: Jerky movement, positioning errors, axis won't move
+Causes:
+- Servo motor malfunction
+- Encoder feedback error
+- Mechanical binding
+- Drive amplifier fault
+
+Troubleshooting Steps:
+1. Check all axis movement manually (power off, LOTO applied)
+2. Inspect ball screws for damage or contamination
+3. Verify encoder cable connections
+4. Check servo drive LED indicators
+5. Run axis calibration routine
+6. Contact maintenance if error persists
+
+Critical Parts: Servo motor (Part #: SM-X200), Encoder (Part #: ENC-1024)
+
+E003 - COOLANT SYSTEM FAULT
+----------------------------
+Symptoms: Low coolant flow, overheating, poor surface finish
+Causes:
+- Clogged coolant lines
+- Pump failure
+- Low coolant level
+- Contaminated coolant
+
+Troubleshooting Steps:
+1. Check coolant tank level
+2. Inspect coolant lines for blockages
+3. Test pump operation
+4. Check coolant quality and contamination
+5. Clean or replace coolant filters
+6. Refill with approved coolant (Type: WS-100)
+
+Maintenance Schedule: Weekly coolant level check, monthly filter replacement
+
+E456 - TOOL CHANGER MALFUNCTION
+--------------------------------
+Symptoms: Tool change timeout, incorrect tool selection, gripper fault
+Causes:
+- Pneumatic pressure low
+- Tool holder damaged
+- Gripper mechanism worn
+- Position sensor fault
+
+Troubleshooting Steps:
+1. Check pneumatic pressure (required: 90-100 PSI)
+2. Inspect tool holders for damage
+3. Verify tool magazine rotation
+4. Test gripper operation manually
+5. Check position sensor alignment
+6. Lubricate tool changer mechanism
+
+Safety Note: Always ensure tool changer is in safe position before maintenance
+
+EMERGENCY PROCEDURES
+====================
+1. Press emergency stop button
+2. Apply lockout/tagout procedure (see SP-001)
+3. Contact maintenance supervisor
+4. Do not attempt repairs without proper training
+
+PREVENTIVE MAINTENANCE
+======================
+Daily:
+- Check coolant level
+- Verify tool condition
+- Clean work area
+
+Weekly:
+- Lubricate guide ways
+- Check air pressure
+- Inspect safety devices
+
+Monthly:
+- Replace coolant filters
+- Calibrate axes
+- Update maintenance log
+
+CONTACT INFORMATION
+===================
+Maintenance Supervisor: Ext. 2922
+CNC Technician: Ext. 2933
+Parts Department: Ext. 2944
+
+⚠️ WARNING: Only qualified technicians should perform repairs on CNC equipment.
+Improper maintenance can result in equipment damage or personal injury.

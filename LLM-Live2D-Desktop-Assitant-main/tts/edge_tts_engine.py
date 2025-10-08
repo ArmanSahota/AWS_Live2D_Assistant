@@ -43,8 +43,19 @@ class EdgeTTSEngine:
         logger.info(f"[EdgeTTS] Synth: voice={self.voice} rate={self.rate} pitch={self.pitch} volume={self.volume}")
         logger.debug(f"[EdgeTTS] Text: {text[:120]}{'...' if len(text)>120 else ''}")
 
-        comm = edge_tts.Communicate(**kwargs)
-        await comm.save(out_path)
+        try:
+            comm = edge_tts.Communicate(**kwargs)
+            await comm.save(out_path)
+        except TypeError as e:
+            if "style" in str(e) and self.style:
+                # If style parameter is not supported, retry without it
+                logger.warning(f"[EdgeTTS] Style parameter not supported by current edge-tts version, retrying without style")
+                kwargs_no_style = kwargs.copy()
+                kwargs_no_style.pop("style", None)
+                comm = edge_tts.Communicate(**kwargs_no_style)
+                await comm.save(out_path)
+            else:
+                raise e
 
         # Duration probing using pydub
         duration = 0.0

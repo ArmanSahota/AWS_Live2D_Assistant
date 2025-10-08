@@ -6,7 +6,7 @@ resolve_s3 = true
 s3_prefix = "live2d-aws-backend"
 region = "us-west-2"
 confirm_changeset = true
-capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+capabilities = "CAPABILITY_IAM"
 disable_rollback = true
-parameter_overrides = "Env=\"dev\""
+parameter_overrides = "Env=\"dev\" EnableRagInfra=\"false\" ModelId=\"arn:aws:bedrock:us-west-2:615299772411:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0\""
 image_repositories = []

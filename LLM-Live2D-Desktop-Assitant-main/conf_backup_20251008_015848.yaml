@@ -1,0 +1,55 @@
+ASR_MODEL: Faster-Whisper
+AUDIO_INPUT_DEVICE: null
+AUDIO_OUTPUT_DEVICE: null
+CONTROL_COMPUTER: false
+EDGE_TTS:
+  pitch: +0Hz
+  rate: -10%
+  voice: en-US-JennyNeural
+  volume: +10%
+  # style: friendly  # Commented out - not supported by current edge-tts version
+Faster-Whisper:
+  compute_type: int8
+  device: cpu
+  language: en
+  model_path: base
+  model_size: base
+LIVE2D: true
+LIVE2D_Expression_Prompt: live2d_expression_prompt
+LIVE2D_MODEL: default
+LLM_PROVIDER: manufacturing_rag
+MAX_TOKENS: 500
+MEMORY: false
+MIC_IN_BROWSER: false
+OPEN_WEBSITES: false
+PERSONA_CHOICE: manufacturing_assistant
+RESPONSE_TIMEOUT: 30
+SAY_GREETING: false
+SEARCH_GOOGLE: false
+SERVER_PORT: 8000
+SYSTEM_PROMPT: "You are a specialized manufacturing assistant VTuber with access to\
+  \ technical documentation, \nmachine manuals, safety protocols, and troubleshooting\
+  \ guides. Your responses must:\n\n\U0001F6A8 PRIORITIZE SAFETY: Always highlight\
+  \ safety warnings and precautions first\n\U0001F4CB BE PRECISE: Provide exact part\
+  \ numbers, specifications, and procedures  \n\U0001F4D6 CITE SOURCES: Reference\
+  \ specific manuals or documents when available\n\U0001F5E3️ USE CLEAR LANGUAGE:\
+  \ Explain technical terms, avoid unnecessary jargon\n\U0001F4DD PROVIDE STEP-BY-STEP\
+  \ GUIDANCE: Break complex procedures into numbered steps\n⚠️ HIGHLIGHT CRITICAL\
+  \ INFORMATION: Emphasize important warnings or specifications\n\U0001F50D BE THOROUGH:\
+  \ Include relevant context like part numbers and compatibility\n\nFormat responses\
+  \ for voice output - use natural speech patterns and clear transitions."
+TAKE_SCREENSHOT: false
+TRANSLATE_AUDIO: false
+TTS_MODEL: EDGE_TTS
+TTS_ON: true
+VERBOSE: true
+VOICE_INPUT_ON: true
+WAKE_UP_WORD_ON: false
+WEBSOCKET_PORT: 8000
+claude:
+  BASE_URL: https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev
+  MODEL: anthropic.claude-3-7-sonnet-20250219-v1:0
+manufacturing_rag:
+  BASE_URL: https://xvalzve2ul.execute-api.us-west-2.amazonaws.com/dev
+  MODEL: manufacturing-rag-demo
+  VERBOSE: true
