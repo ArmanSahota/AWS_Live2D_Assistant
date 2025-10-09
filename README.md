@@ -1,14 +1,28 @@
 # AWS VTuber LLM Project
 
-This project contains an LLM-powered Live2D Desktop Assistant with AWS integration capabilities.
+A sophisticated LLM-powered Live2D Desktop Assistant with AWS integration capabilities, featuring RAG (Retrieval-Augmented Generation) for enhanced manufacturing and technical support.
 
-## Project Structure
+## 🚨 Security Notice
+
+This project has been cleaned and organized with security best practices:
+- **All sensitive AWS information has been removed**
+- **Use `.env.example` as a template for your configuration**
+- **Never commit actual credentials to version control**
+
+## 📁 Project Structure
 
 ```
-├── .gitignore                          # Git ignore rules
+├── .env.example                        # Environment configuration template
+├── .gitignore                          # Enhanced security rules
 ├── package.json                        # Root package configuration
 ├── package-lock.json                   # Package lock file
 ├── README.md                           # This file
+│
+├── archive/                            # Archived files (organized cleanup)
+│   ├── duplicates/                     # Duplicate AWS setup guides
+│   ├── old-docs/                       # Legacy documentation
+│   ├── old-tests/                      # Archived test files
+│   └── app-docs/                       # Application-specific docs
 │
 ├── assets/                             # Audio and binary assets
 │   ├── test_stt_recording.wav          # Sample STT recording
@@ -16,68 +30,29 @@ This project contains an LLM-powered Live2D Desktop Assistant with AWS integrati
 │   └── 伊蕾娜_zh_wasm_v3_0_0.ppn        # Wake word model file
 │
 ├── config/                             # Configuration files
-│
-├── docs/                               # Documentation
+├── docs/                               # Current documentation
 │   ├── aws/                            # AWS-related documentation
-│   │   ├── AWS_BEDROCK_OPUS_FIX.md     # AWS Bedrock Opus fixes
-│   │   ├── aws-hybrid-poc-guide.md     # Hybrid POC guide
-│   │   ├── aws-migration-plan.md       # Migration planning
-│   │   └── OPUS_SETUP_GUIDE.md         # Opus setup instructions
-│   │
 │   ├── guides/                         # User guides and tutorials
-│   │   ├── FRONTEND_BACKEND_CONNECTION_GUIDE.md
-│   │   ├── quick-fix-guide.md
-│   │   ├── TESTING_GUIDE.md
-│   │   └── WAKE_WORD_SETUP_GUIDE.md
-│   │
-│   ├── plans/                          # Project planning documents
-│   │   ├── claude-prompts-integration-plan.md
-│   │   ├── claude-prompts-integration-todo.md
-│   │   ├── claude-prompts-workflow-diagram.md
-│   │   ├── comprehensive-development-workflow-plan.md
-│   │   ├── object-recognition-implementation-roadmap.md
-│   │   ├── object-recognition-vision-plan.md
-│   │   ├── vision-architecture-diagram.md
-│   │   ├── vision-implementation-todo.md
-│   │   ├── vtuber-free-roam-feature.md
-│   │   └── vtuber-vision-integration-plan.md
-│   │
 │   ├── status/                         # Project status reports
-│   │   ├── FINAL_PIPELINE_STATUS.md
-│   │   ├── FINAL_STATUS_REPORT.md
-│   │   ├── implementation-todo-list.md
-│   │   └── NEXT_STEPS_EXECUTION.md
-│   │
 │   └── troubleshooting/                # Troubleshooting guides
-│       ├── PIPELINE_INTEGRATION_FIXES.md
-│       ├── PIPELINE_TEST_RESULTS.md
-│       ├── TEST_RESULTS_REPORT.md
-│       ├── websocket-audio-fix-plan.md
-│       └── websocket-fix-todo.md
 │
 ├── scripts/                            # Utility scripts
-│   ├── fix_frontend_backend_connection.bat
-│   ├── fix_ipc_tts.py
-│   ├── start_app.bat
-│   ├── test_claude_aws.bat
-│   └── test_websocket_connection_root.bat
-│
-├── tests/                              # Test files
-│   ├── test_claude_opus.py
-│   ├── test_connection_diagnostic.js
-│   ├── test_connection.js
-│   ├── test_stt.py
-│   └── test_tts.py
-│
-├── .roo/                               # Roo configuration
 ├── Claude_Prompts_RooCode/             # Claude prompts and code
 └── LLM-Live2D-Desktop-Assitant-main/   # Main application
 ```
 
-## Main Application
+## 🎯 Main Application Features
 
-The core application is located in `LLM-Live2D-Desktop-Assitant-main/` and contains:
+The core application (`LLM-Live2D-Desktop-Assitant-main/`) includes:
 
+- **🤖 AI Assistant**: Claude-powered conversational AI
+- **🎭 Live2D Integration**: Animated character interface
+- **🗣️ Speech Processing**: STT (Speech-to-Text) and TTS (Text-to-Speech)
+- **🔍 RAG System**: AWS Knowledge Base integration for manufacturing support
+- **🌐 Web Interface**: Browser-based interaction
+- **🔧 Manufacturing Mode**: Specialized technical assistance
+
+### Core Components:
 - **src/**: Source code for the main application
 - **static/**: Static assets including Live2D models and web resources
 - **tests/**: Application-specific test suites
@@ -86,42 +61,127 @@ The core application is located in `LLM-Live2D-Desktop-Assitant-main/` and conta
 - **translate/**: Translation services
 - **utils/**: Utility functions and helpers
 
-## Quick Start
+## 🚀 Quick Start
 
-1. Navigate to the main application directory:
-   ```bash
-   cd LLM-Live2D-Desktop-Assitant-main
-   ```
+### 1. Environment Setup
+```bash
+# Copy the environment template
+cp .env.example .env
 
-2. Install dependencies:
-   ```bash
-   npm install
-   pip install -r requirements.txt
-   ```
+# Edit .env with your actual AWS credentials and configuration
+# NEVER commit the .env file to version control
+```
 
-3. Configure your environment (see docs/guides/ for setup instructions)
+### 2. Install Dependencies
+```bash
+# Navigate to the main application
+cd LLM-Live2D-Desktop-Assitant-main
 
-4. Run the application:
-   ```bash
-   # Use the provided script
-   ../scripts/start_app.bat
-   
-   # Or run directly
-   python server.py
-   ```
+# Install Node.js dependencies
+npm install
 
-## Documentation
+# Install Python dependencies
+pip install -r requirements.txt
+```
 
-- **Setup Guides**: See `docs/guides/` for installation and configuration
-- **AWS Integration**: See `docs/aws/` for cloud deployment information
-- **Troubleshooting**: See `docs/troubleshooting/` for common issues and fixes
-- **Project Planning**: See `docs/plans/` for roadmaps and feature planning
-- **Status Reports**: See `docs/status/` for current project status
+### 3. Configure AWS (Optional)
+If using AWS RAG features:
+- Set up AWS credentials in `.env`
+- Configure Knowledge Base ID
+- Ensure proper IAM permissions
 
-## Testing
+### 4. Run the Application
+```bash
+# From the main application directory
+python server.py
 
-Run tests using the scripts in the `tests/` directory or use the provided batch files in `scripts/`.
+# Or use the provided scripts
+../scripts/start_app.bat
+```
 
-## Contributing
+## 📚 Documentation
 
-Please refer to the documentation in `docs/` for development guidelines and project structure information.
+- **Setup Guides**: See [`docs/guides/`](docs/guides/) for installation and configuration
+- **AWS Integration**: See [`docs/aws/`](docs/aws/) for cloud deployment information
+- **Troubleshooting**: See [`docs/troubleshooting/`](docs/troubleshooting/) for common issues and fixes
+- **Project Status**: See [`docs/status/`](docs/status/) for current project status
+
+## 🔒 Security Features
+
+### Enhanced `.gitignore`
+- AWS credentials and sensitive files
+- Environment configuration files
+- Debug and diagnostic outputs
+- Temporary and backup files
+- Large binary files
+
+### Configuration Management
+- Template-based configuration (`.env.example`)
+- Sensitive data isolation
+- No hardcoded credentials
+
+## 🧪 Testing
+
+Run tests using the scripts in the main application's `tests/` directory:
+
+```bash
+cd LLM-Live2D-Desktop-Assitant-main/tests
+# Various test suites available for different components
+```
+
+## 🗂️ Archive Information
+
+The `archive/` directory contains:
+- **duplicates/**: Duplicate AWS setup guides (moved for cleanup)
+- **old-docs/**: Legacy documentation files
+- **old-tests/**: Archived test files from root level
+- **app-docs/**: Application-specific documentation
+
+These files are preserved for reference but are no longer part of the active project structure.
+
+## 🛠️ Development
+
+### Project Organization
+- Clean separation of concerns
+- Modular architecture
+- Comprehensive testing
+- Security-first approach
+
+### Contributing Guidelines
+1. Never commit sensitive information
+2. Use environment variables for configuration
+3. Follow the established project structure
+4. Update documentation for significant changes
+
+## 📋 Requirements
+
+- **Python 3.8+**
+- **Node.js 16+**
+- **AWS Account** (optional, for RAG features)
+- **Modern web browser** for the interface
+
+## 🔧 Configuration
+
+### Environment Variables
+See `.env.example` for all available configuration options:
+- AWS credentials and region
+- Knowledge Base configuration
+- Application settings
+- Debug options
+
+### AWS Setup (Optional)
+For RAG functionality:
+1. Set up AWS Bedrock access
+2. Create Knowledge Base
+3. Configure OpenSearch Serverless
+4. Set appropriate IAM permissions
+
+## 📞 Support
+
+- Check [`docs/troubleshooting/`](docs/troubleshooting/) for common issues
+- Review archived documentation in `archive/` if needed
+- Ensure environment variables are properly configured
+
+---
+
+**⚠️ Security Reminder**: This project has been cleaned of sensitive information. Always use environment variables for credentials and never commit sensitive data to version control.

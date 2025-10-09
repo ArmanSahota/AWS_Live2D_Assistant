@@ -26,6 +26,15 @@ from tts.stream_audio import AudioPayloadPreparer
 from port_config import get_available_port, cleanup_ports, get_current_port
 import argparse
 
+# Enhanced Vision + RAG Pipeline
+try:
+    from vision_rag_pipeline import VisionRAGPipeline, enhance_vision_analysis_with_rag
+    VISION_RAG_AVAILABLE = True
+    logger.info("[Vision RAG] Vision + RAG pipeline available")
+except ImportError:
+    VISION_RAG_AVAILABLE = False
+    logger.warning("[Vision RAG] Vision + RAG pipeline not available")
+
 # Enhanced RAG imports
 try:
     from aws_knowledge_base_rag import AWSKnowledgeBaseRAG, HybridRAGSystem, create_rag_system
@@ -406,7 +415,9 @@ class WebSocketServer:
         self, websocket: WebSocket, loop
     ) -> tuple[Live2dModel, OpenLLMVTuberMain, AudioPayloadPreparer]:
         """Initialize or reinitialize components with current configuration."""
-        l2d = Live2dModel(self.open_llm_vtuber_main_config["LIVE2D_MODEL"])
+        # Handle missing LIVE2D_MODEL configuration gracefully
+        live2d_model = self.open_llm_vtuber_main_config.get("LIVE2D_MODEL", "default")
+        l2d = Live2dModel(live2d_model)
 
         # Use cached models if available
         custom_asr = (
@@ -763,7 +774,7 @@ class WebSocketServer:
                                         return
                                     
                                     # Enhanced RAG processing
-                                    if self.rag_system and request.enable_rag:
+                                    if self.rag_system:
                                         try:
                                             rag_response = self.rag_system.get_context(user_input)
                                             if rag_response.sources_used > 0:
@@ -804,46 +815,93 @@ class WebSocketServer:
                                     }))
                                     continue
                                 
-                                logger.info(f"[VISION FIX] Sending image to Claude Vision API...")
+                                logger.info(f"[VISION RAG] Starting two-stage Vision + RAG analysis...")
                                 
                                 try:
-                                    # Enhanced vision analysis with RAG context
-                                    rag_context = ""
-                                    if self.rag_system and user_question:
-                                        try:
-                                            # Get RAG context for vision analysis
-                                            rag_context = load_enhanced_rag_context_for_vision(user_question, "")
-                                        except Exception as e:
-                                            logger.warning(f"[Vision RAG] Could not load context: {e}")
-                                    
-                                    # Prepare vision request with RAG context
-                                    vision_prompt = user_question
-                                    if rag_context:
-                                        vision_prompt = f"{rag_context}\n\nAnalyze this image in the context of the above documentation: {user_question}"
-                                    
-                                    # Call Claude Vision API (mock for now)
-                                    vision_response = f"Vision analysis: {vision_prompt[:100]}... [Mock response]"
-                                    
-                                    # Create concise summary
-                                    concise_summary = _create_concise_vision_summary(vision_response, user_question)
-                                    
-                                    await websocket.send_text(json.dumps({
-                                        "type": "object-analysis-result",
-                                        "analysisId": analysis_id,
-                                        "result": concise_summary,
-                                        "fullAnalysis": vision_response,
-                                        "ragContextUsed": bool(rag_context),
-                                        "timestamp": asyncio.get_event_loop().time()
-                                    }))
-                                    
-                                    logger.info(f"[VISION FIX] ✅ Successfully sent analysis result for {analysis_id}")
+                                    # Use the new Vision + RAG pipeline
+                                    if VISION_RAG_AVAILABLE:
+                                        logger.info(f"[VISION RAG] Using enhanced Vision + RAG pipeline")
+                                        
+                                        # Get Knowledge Base ID from environment
+                                        kb_id = os.environ.get("AWS_KNOWLEDGE_BASE_ID", "HVTKAK0Q86")
+                                        
+                                        # Process image with Vision + RAG pipeline
+                                        pipeline_result = enhance_vision_analysis_with_rag(
+                                            image_data=image_data,
+                                            user_question=user_question,
+                                            knowledge_base_id=kb_id
+                                        )
+                                        
+                                        if pipeline_result.get("pipeline_success"):
+                                            vision_info = pipeline_result.get("vision_analysis", {})
+                                            rag_info = pipeline_result.get("rag_context", {})
+                                            enhanced_response = pipeline_result.get("enhanced_response", "")
+                                            
+                                            # Create concise summary for TTS
+                                            concise_summary = self._create_vision_rag_summary(
+                                                vision_info, rag_info, user_question
+                                            )
+                                            
+                                            await websocket.send_text(json.dumps({
+                                                "type": "object-analysis-result",
+                                                "analysisId": analysis_id,
+                                                "result": concise_summary,
+                                                "fullAnalysis": enhanced_response,
+                                                "visionAnalysis": vision_info,
+                                                "ragContext": {
+                                                    "sourcesUsed": rag_info.get("sources_used", 0),
+                                                    "searchQuery": rag_info.get("search_query", ""),
+                                                    "relevantDocs": len(rag_info.get("relevant_docs", []))
+                                                },
+                                                "pipelineUsed": "vision_rag",
+                                                "timestamp": asyncio.get_event_loop().time()
+                                            }))
+                                            
+                                            logger.info(f"[VISION RAG] ✅ Enhanced analysis completed - Vision + {rag_info.get('sources_used', 0)} RAG sources")
+                                        else:
+                                            # Fallback to basic vision analysis
+                                            error_msg = pipeline_result.get("error", "Pipeline failed")
+                                            logger.warning(f"[VISION RAG] Pipeline failed: {error_msg}, using fallback")
+                                            
+                                            await websocket.send_text(json.dumps({
+                                                "type": "object-analysis-result",
+                                                "analysisId": analysis_id,
+                                                "result": "I can see an object in the image. Would you like me to tell you more about it?",
+                                                "fullAnalysis": f"Vision + RAG pipeline encountered an issue: {error_msg}",
+                                                "pipelineUsed": "fallback",
+                                                "timestamp": asyncio.get_event_loop().time()
+                                            }))
+                                    else:
+                                        # Fallback to original vision analysis
+                                        logger.info(f"[VISION] Using original vision analysis (Vision RAG not available)")
+                                        
+                                        # Original vision analysis code
+                                        rag_context = load_enhanced_rag_context_for_vision(user_question, "")
+                                        
+                                        vision_prompt = user_question
+                                        if rag_context:
+                                            vision_prompt = f"{rag_context}\n\nAnalyze this image: {user_question}"
+                                        
+                                        vision_response = f"Vision analysis: {vision_prompt[:100]}... [Mock response]"
+                                        concise_summary = _create_concise_vision_summary(vision_response, user_question)
+                                        
+                                        await websocket.send_text(json.dumps({
+                                            "type": "object-analysis-result",
+                                            "analysisId": analysis_id,
+                                            "result": concise_summary,
+                                            "fullAnalysis": vision_response,
+                                            "ragContextUsed": bool(rag_context),
+                                            "pipelineUsed": "original",
+                                            "timestamp": asyncio.get_event_loop().time()
+                                        }))
                                     
                                 except Exception as e:
                                     logger.error(f"[VISION ERROR] ❌ Vision analysis failed: {e}")
                                     await websocket.send_text(json.dumps({
                                         "type": "object-analysis-result",
                                         "analysisId": analysis_id,
-                                        "error": f"Vision analysis failed: {str(e)}"
+                                        "error": f"Vision analysis failed: {str(e)}",
+                                        "pipelineUsed": "error"
                                     }))
                                     
                             except Exception as e:
@@ -868,6 +926,62 @@ class WebSocketServer:
                 if websocket in self.connected_clients:
                     self.connected_clients.remove(websocket)
                 logger.info(f"WebSocket connection cleaned up. Remaining clients: {len(self.connected_clients)}")
+
+    def _create_vision_rag_summary(self, vision_info: Dict, rag_info: Dict, user_question: str) -> str:
+        """
+        Create a concise summary from Vision + RAG analysis for TTS
+        
+        Args:
+            vision_info: Vision analysis results
+            rag_info: RAG context results
+            user_question: Original user question
+            
+        Returns:
+            Concise summary suitable for TTS
+        """
+        try:
+            # Start with objects detected
+            objects = vision_info.get("objects_detected", [])
+            if objects:
+                object_str = ", ".join(objects[:3])  # Limit to top 3
+                summary = f"I can see {object_str}"
+            else:
+                summary = "I can see an object"
+            
+            # Add manufacturing relevance
+            relevance = vision_info.get("manufacturing_relevance", "")
+            if relevance and relevance != "Unknown":
+                summary += f" related to {relevance.lower()}"
+            
+            # Add safety concerns if any
+            safety_concerns = vision_info.get("safety_concerns", [])
+            if safety_concerns:
+                summary += f". ⚠️ Safety note: {safety_concerns[0]} concerns detected"
+            
+            # Add RAG context if available
+            sources_used = rag_info.get("sources_used", 0)
+            if sources_used > 0:
+                summary += f". Based on our documentation, I found {sources_used} relevant procedures"
+                
+                # Add key insight from top document
+                relevant_docs = rag_info.get("relevant_docs", [])
+                if relevant_docs:
+                    top_doc = relevant_docs[0]
+                    if "safety" in top_doc.get("content", "").lower():
+                        summary += " including safety protocols"
+                    elif "maintenance" in top_doc.get("content", "").lower():
+                        summary += " including maintenance procedures"
+                    elif "troubleshooting" in top_doc.get("content", "").lower():
+                        summary += " including troubleshooting steps"
+            
+            # Add offer for more details
+            summary += ". Would you like me to provide detailed information?"
+            
+            return summary
+            
+        except Exception as e:
+            logger.error(f"Error creating vision RAG summary: {e}")
+            return "I can see an object. Would you like me to tell you more about it?"
 
     def _scan_config_alts_directory(self) -> List[str]:
         config_files = ["conf.yaml"]  # default config file
@@ -1124,8 +1238,41 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Load configuration
+    # Load configuration with fallback
     config = load_config_with_env(args.config)
+    
+    # If config loading failed, provide default configuration
+    if not config:
+        logger.warning(f"Could not load config from {args.config}, using default configuration")
+        config = {
+            "LIVE2D_MODEL": "default",
+            "LIVE2D": True,
+            "TTS_ON": True,
+            "VOICE_INPUT_ON": True,
+            "LLM_PROVIDER": "claude",
+            "ASR_MODEL": "Faster-Whisper",
+            "TTS_MODEL": "EDGE_TTS",
+            "VERBOSE": True,
+            "SERVER_PORT": 8000,
+            "WEBSOCKET_PORT": 8000,
+            "MAX_TOKENS": 500,
+            "SYSTEM_PROMPT": "You are a helpful AI assistant with RAG capabilities.",
+            "PERSONA_CHOICE": "service_assistant",
+            "LIVE2D_Expression_Prompt": "live2d_expression_prompt"
+        }
+    
+    # Ensure required keys exist
+    required_keys = {
+        "LIVE2D_MODEL": "default",
+        "LIVE2D": True,
+        "TTS_ON": True,
+        "VOICE_INPUT_ON": True
+    }
+    
+    for key, default_value in required_keys.items():
+        if key not in config:
+            config[key] = default_value
+            logger.info(f"Added missing config key {key} with default value: {default_value}")
     
     # Create and run server
     server = WebSocketServer(config, web=args.web)

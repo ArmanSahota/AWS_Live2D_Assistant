@@ -58,10 +58,10 @@ class AWSRAGDeployer:
             raise FileNotFoundError("Enhanced template not found. Please ensure backend/template-enhanced.yml exists.")
         
         try:
-            # Deploy using SAM CLI
+            # Deploy using SAM CLI from the backend directory
             cmd = [
                 "sam", "deploy",
-                "--template-file", str(template_path),
+                "--template-file", "template-enhanced.yml",
                 "--stack-name", stack_name,
                 "--parameter-overrides", f"Env={env}", "EnableRagInfra=true",
                 "--capabilities", "CAPABILITY_IAM", "CAPABILITY_NAMED_IAM",
@@ -72,7 +72,14 @@ class AWSRAGDeployer:
                 cmd.extend(["--profile", self.profile])
             
             print(f"Running: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True, cwd="backend")
+            print(f"Working directory: backend/")
+            
+            # Change to backend directory for SAM deployment
+            backend_dir = Path("backend")
+            if not backend_dir.exists():
+                raise FileNotFoundError("Backend directory not found. Please run from the project root.")
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(backend_dir))
             
             if result.returncode != 0:
                 print(f"SAM deploy failed: {result.stderr}")

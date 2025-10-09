@@ -75,8 +75,16 @@ class ConversationManager:
         print(f"User input: {user_input}")
 
         prompt, image_base64 = self.get_prompt_and_image(user_input, clipboard_data)
+        print(f"[CONVERSATION DEBUG] Got prompt: {prompt[:100]}...")
         
-        chat_completion: Iterator[str] = self.llm.chat_iter(prompt, image_base64)
+        # Add RAG context for manufacturing/technical queries
+        print(f"[CONVERSATION DEBUG] Enhancing prompt with RAG...")
+        enhanced_prompt = self._enhance_prompt_with_rag(prompt, user_input)
+        print(f"[CONVERSATION DEBUG] Enhanced prompt length: {len(enhanced_prompt)} chars")
+        
+        print(f"[CONVERSATION DEBUG] Calling LLM chat_iter...")
+        chat_completion: Iterator[str] = self.llm.chat_iter(enhanced_prompt, image_base64)
+        print(f"[CONVERSATION DEBUG] Got chat_completion iterator")
 
         if not self.config.get("TTS_ON", False):
             full_response = ""
@@ -96,6 +104,53 @@ class ConversationManager:
         print(f"{c[color_code]}Conversation completed.")
         return full_response
 
+    def _enhance_prompt_with_rag(self, prompt: str, user_input: str) -> str:
+        """
+        Enhance the prompt with RAG context if relevant keywords are detected
+        """
+        # Check if RAG is available by trying to import the function
+        try:
+            from server import load_rag_context_for_vision
+            rag_available = True
+            print(f"[CONVERSATION RAG] RAG system available, proceeding with enhancement")
+        except ImportError as e:
+            print(f"[CONVERSATION RAG] RAG system not available: {e}, skipping enhancement")
+            return prompt
+        
+        # Keywords that trigger RAG enhancement
+        rag_keywords = [
+            'error', 'e001', 'e002', 'e003', 'malfunction', 'troubleshoot', 'repair',
+            'manufacturing', 'equipment', 'machine', 'safety', 'procedure', 'manual',
+            'knowledge base', 'documentation', 'help', 'how to', 'what is'
+        ]
+        
+        # Check if user input contains RAG-relevant keywords
+        user_lower = user_input.lower()
+        should_enhance = any(keyword in user_lower for keyword in rag_keywords)
+        
+        if should_enhance:
+            try:
+                print(f"[CONVERSATION RAG] Detected relevant query, enhancing with KB context")
+                # RAG function already imported above
+                rag_context = load_rag_context_for_vision(user_input, "")
+                
+                if rag_context and len(rag_context) > 50:
+                    enhanced_prompt = f"""You are a manufacturing assistant with access to a comprehensive knowledge base.
+
+{rag_context}
+
+Based on the above knowledge base information and your general knowledge, please respond to: {prompt}
+
+If the knowledge base contains relevant information, use it in your response. If not, provide general guidance while mentioning that specific documentation might be helpful."""
+                    
+                    print(f"[CONVERSATION RAG] Enhanced prompt with {len(rag_context)} characters of context")
+                    return enhanced_prompt
+                else:
+                    print(f"[CONVERSATION RAG] No relevant context found in KB")
+            except Exception as e:
+                print(f"[CONVERSATION RAG] Error enhancing prompt: {e}")
+        
+        return prompt
 
     def get_user_input(self) -> str:
         if self.config.get("VOICE_INPUT_ON", False):

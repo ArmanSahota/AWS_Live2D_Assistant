@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Live2D Assistant - minimal backend (HTTP /health + WebSocket echo + Claude HTTP), RAG infra optional.
+Description: Live2D Assistant - minimal backend with RAG infrastructure
 
 Parameters:
   Env:
@@ -170,7 +170,7 @@ Resources:
   OrchestratorFn:
     Type: AWS::Serverless::Function
     Properties:
-      Description: WS chat echo (stub) — streams two deltas + done
+      Description: WS chat echo (stub) - streams two deltas + done
       Handler: index.lambda_handler
       InlineCode: |
         import json, boto3
@@ -215,7 +215,7 @@ Resources:
   ClaudeHttpFn:
     Type: AWS::Serverless::Function
     Properties:
-      Description: HTTP POST /claude → invoke Bedrock Anthropic Claude Sonnet (RAG optional via env)
+      Description: HTTP POST /claude with RAG support
       Handler: index.lambda_handler
       Timeout: 60
       MemorySize: 1024
@@ -298,7 +298,7 @@ Resources:
             reply = data["content"][0]["text"]
 
             if docs and any(("safety" in d["source"].lower()) or ("critical" in d["content"].lower()) for d in docs):
-                reply = "⚠️ SAFETY NOTICE: This response contains safety-critical information. Follow all safety protocols.\n\n" + reply
+                reply = "WARNING: This response contains safety-critical information. Follow all safety protocols.\n\n" + reply
 
             return {"statusCode":200,"headers":headers,"body":json.dumps({"reply": reply,"sources_used": len(docs),"rag_enabled": bool(KNOWLEDGE_BASE_ID) and len(docs)>0,"retrieved_sources": [d["source"] for d in docs]})}
       Environment:
@@ -306,7 +306,7 @@ Resources:
           MODEL_ID: !Ref ModelId
           BEDROCK_REGION: !Ref AWS::Region
           MAX_TOKENS: "2048"
-          KNOWLEDGE_BASE_ID: ""              # leave empty until RAG infra is enabled/created
+          KNOWLEDGE_BASE_ID: ""
           DOCUMENTS_BUCKET: !Ref DocumentsBucket
       Policies:
         - AWSLambdaBasicExecutionRole
@@ -314,6 +314,7 @@ Resources:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
+                - bedrock-agent:Retrieve
               Resource: "*"
             - Effect: Allow
               Action:

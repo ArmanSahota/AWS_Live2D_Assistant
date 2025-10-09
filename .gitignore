@@ -102,4 +102,55 @@ local-config.json
 
 # Test outputs
 test-results/
+
+# AWS credentials and sensitive information (SECURITY CRITICAL)
+**/YOUR_AWS_INFO.md
+**/*AWS_INFO*.md
+**/*credentials*.json
+**/*secrets*.json
+**/AWS_KNOWLEDGE_BASE_ID*
+**/AWS_ACCESS_KEY*
+**/AWS_SECRET_ACCESS_KEY*
+
+# Environment files with secrets
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug and diagnostic files
+debug_*.log
+diagnostic_*.log
+**/debug/
+**/diagnostics/
+
+# Backup and temporary files
+*.backup
+*.bak
+*_backup.*
+*_old.*
+*_temp.*
+*.orig
+
+# IDE specific files
+.vscode/settings.json
+.vscode/launch.json
+
+# Large binary files and models
+*.model3.json
+*.moc3
+*.physics3.json
+*.cdi3.json
+
+# Documentation with sensitive info
+**/SENSITIVE_*
+**/PRIVATE_*
+**/INTERNAL_*
+
+# Test outputs (expanded)
+**/test_output/
+**/test-results/
+test_*.wav
+test_*.mp3
+**/Test_Photos/
 test-output/

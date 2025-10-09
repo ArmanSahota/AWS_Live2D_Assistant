@@ -50,13 +50,21 @@ async function updateContextMenu() {
   contextMenu = Menu.buildFromTemplate([
     { label: 'Show Subtitles', type: 'checkbox', checked: true, click: (menuItem) => toggleSubtitles(menuItem.checked) },
     { label: 'Microphone', type: 'checkbox', checked: true, click: (menuItem) => toggleMicrophone(menuItem.checked) },
-    { 
+    {
       label: 'Select Microphone',
       click: () => showMicrophoneSelectionDialog()
     },
     { label: 'Allow Interruption', type: 'checkbox', checked: false, click: (menuItem) => toggleInterruption(menuItem.checked) },
     { label: 'Wake-up', type: 'checkbox', checked: false, click: (menuItem) => toggleWakeUp(menuItem.checked) },
     { label: 'Hide', type: 'checkbox', checked: false, click: (menuItem) => toggleMinimize(menuItem.checked) },
+    {
+      label: 'Window',
+      submenu: [
+        { label: 'Reset Size', click: () => resetWindowSize() },
+        { label: 'Center Window', click: () => centerWindow() },
+        { label: 'Toggle Always On Top', click: () => toggleAlwaysOnTop() }
+      ]
+    },
     {
       label: 'Speech Sensitivity',
       submenu: [
@@ -86,11 +94,13 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    minWidth: 400,
+    minHeight: 300,
     x: 0,
     y: 0,
     transparent: true,
     frame: false,
-    resizable: false,
+    resizable: true,
     alwaysOnTop: true,
     skipTaskbar: true,
     hasShadow: false,
@@ -188,6 +198,32 @@ function switchConfig(configFile) {
 
 function setSensitivity(value) {
   mainWindow.webContents.send('set-sensitivity', value);
+}
+
+function resetWindowSize() {
+  if (mainWindow) {
+    mainWindow.setSize(1280, 800);
+    console.log('Window size reset to 1280x800');
+  }
+}
+
+function centerWindow() {
+  if (mainWindow) {
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+    const windowBounds = mainWindow.getBounds();
+    const x = Math.round((width - windowBounds.width) / 2);
+    const y = Math.round((height - windowBounds.height) / 2);
+    mainWindow.setPosition(x, y);
+    console.log(`Window centered at position: ${x}, ${y}`);
+  }
+}
+
+function toggleAlwaysOnTop() {
+  if (mainWindow) {
+    const isAlwaysOnTop = mainWindow.isAlwaysOnTop();
+    mainWindow.setAlwaysOnTop(!isAlwaysOnTop, 'screen-saver');
+    console.log(`Always on top: ${!isAlwaysOnTop}`);
+  }
 }
 
 // Use whenReady() to ensure initializeIPC() is only called once

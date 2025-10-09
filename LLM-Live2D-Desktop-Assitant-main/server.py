@@ -13,6 +13,24 @@ import yaml
 import numpy as np
 import chardet
 from loguru import logger
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger.info("[ENV] Loaded environment variables from .env file")
+except ImportError:
+    logger.warning("[ENV] python-dotenv not available, .env file not loaded")
+except Exception as e:
+    logger.error(f"[ENV] Error loading .env file: {e}")
+
+# Add diagnostic logging for KB access
+kb_id = os.environ.get("AWS_KNOWLEDGE_BASE_ID")
+aws_region = os.environ.get("AWS_REGION")
+logger.info(f"[KB DEBUG] AWS_KNOWLEDGE_BASE_ID: {'SET' if kb_id else 'NOT SET'}")
+logger.info(f"[KB DEBUG] AWS_REGION: {'SET' if aws_region else 'NOT SET'}")
+if kb_id:
+    logger.info(f"[KB DEBUG] Knowledge Base ID: {kb_id}")
 from fastapi import FastAPI, WebSocket, APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -41,6 +59,15 @@ try:
 except ImportError:
     S3_RAG_AVAILABLE = False
     print("[RAG] Warning: Simple S3 RAG not available")
+
+# Import Vision + RAG Pipeline
+try:
+    from vision_rag_pipeline import enhance_vision_analysis_with_rag
+    VISION_RAG_AVAILABLE = True
+    print("[Vision RAG] Vision + RAG pipeline available")
+except ImportError:
+    VISION_RAG_AVAILABLE = False
+    print("[Vision RAG] Warning: Vision + RAG pipeline not available")
 
 
 def find_available_port(start_port: int = 1025, max_attempts: int = 25) -> int:
@@ -77,13 +104,82 @@ def find_available_port(start_port: int = 1025, max_attempts: int = 25) -> int:
 
 
 def load_rag_context_for_vision(user_question: str = "", image_analysis_preview: str = "") -> str:
-    """Load RAG context for manufacturing vision analysis"""
+    """Enhanced RAG context loading with AWS Knowledge Base support"""
+    
+    # Try AWS Knowledge Base first if available
+    kb_id = os.environ.get("AWS_KNOWLEDGE_BASE_ID", "HVTKAK0Q86")  # Default to our KB ID
+    if kb_id and VISION_RAG_AVAILABLE:
+        try:
+            print(f"[AWS RAG] Using AWS Knowledge Base: {kb_id}")
+            from vision_rag_pipeline import enhance_vision_analysis_with_rag
+            
+            # Create a simple text-based search (no image for text queries)
+            search_query = f"{user_question} {image_analysis_preview}".strip()
+            if not search_query:
+                search_query = "manufacturing error analysis equipment defect"
+            
+            # Use just the RAG search part of the pipeline
+            import boto3
+            bedrock_agent = boto3.client("bedrock-agent-runtime", region_name="us-west-2")
+            
+            response = bedrock_agent.retrieve(
+                knowledgeBaseId=kb_id,
+                retrievalQuery={"text": search_query},
+                retrievalConfiguration={
+                    "vectorSearchConfiguration": {
+                        "numberOfResults": 5,
+                        "overrideSearchType": "SEMANTIC"
+                    }
+                }
+            )
+            
+            results = response.get("retrievalResults", [])
+            if results:
+                rag_context = "\n\n=== AWS KNOWLEDGE BASE ===\n"
+                rag_context += f"Retrieved {len(results)} relevant documents:\n\n"
+                
+                for i, result in enumerate(results, 1):
+                    content = result["content"]["text"]
+                    source = result["metadata"].get("source", "Unknown")
+                    score = result.get("score", 0)
+                    
+                    safety_indicator = "⚠️ " if any(keyword in content.lower()
+                                                 for keyword in ["safety", "critical", "warning"]) else ""
+                    
+                    rag_context += f"{i}. {safety_indicator}{source} (Score: {score:.3f})\n"
+                    # Include full content instead of truncating at 400 chars
+                    rag_context += f"   {content}\n\n"
+                
+                rag_context += "=== END KNOWLEDGE BASE ===\n\n"
+                print(f"[AWS RAG] Enhanced context with {len(results)} documents from AWS KB")
+                return rag_context
+            else:
+                print(f"[AWS RAG] No results from AWS Knowledge Base, trying local RAG")
+                
+        except Exception as e:
+            print(f"[AWS RAG] Error: {e}, falling back to local RAG")
+    # Fallback to original local RAG
     if not RAG_AVAILABLE:
         return ""
     
     try:
         # Initialize RAG client
         rag_client = DemoManufacturingRAG()
+        
+        # Check if the method exists and use appropriate method
+        if hasattr(rag_client, 'get_context'):
+            context = rag_client.get_context(user_question)
+        elif hasattr(rag_client, 'get_manufacturing_context'):
+            context = rag_client.get_manufacturing_context(user_question)
+        else:
+            print(f"[RAG] Warning: RAG client missing expected methods")
+            return ""
+        
+        if context:
+            return f"\n\n=== LOCAL RAG CONTEXT ===\n{context}\n=== END LOCAL RAG ===\n\n"
+        else:
+            return ""
+            
         
         # Create search query from user question and any initial image analysis
         search_query = f"{user_question} {image_analysis_preview}".strip()
@@ -94,13 +190,14 @@ def load_rag_context_for_vision(user_question: str = "", image_analysis_preview:
         context = rag_client.get_context(search_query)
         
         if context and hasattr(context, 'relevant_docs') and context.relevant_docs:
-            rag_context = "\n\n=== MANUFACTURING KNOWLEDGE BASE ===\n"
+            rag_context = "\n\n=== LOCAL MANUFACTURING KNOWLEDGE BASE ===\n"
             rag_context += "Based on your manufacturing documentation, here is relevant context:\n\n"
             
             for doc in context.relevant_docs[:3]:  # Use top 3 most relevant documents
                 rag_context += f"• {doc.get('content', '')[:500]}...\n\n"
             
             rag_context += "=== END KNOWLEDGE BASE ===\n\n"
+            print(f"[Local RAG] Enhanced context with {len(context.relevant_docs)} documents")
             return rag_context
         
     except Exception as e:
@@ -965,14 +1062,55 @@ class WebSocketServer:
                                             config = {}
                                         
                                         if is_manufacturing_mode(config):
-                                            print(f"[RAG] Manufacturing mode detected - loading RAG context")
+                                            print(f"[VISION RAG] Manufacturing mode detected - using Vision + RAG pipeline")
                                             
-                                            # Try to load RAG context
-                                            rag_context = load_rag_context_for_vision(user_question, "")
-                                            
-                                            # Fallback to local documents if RAG not available
-                                            if not rag_context:
-                                                rag_context = load_local_rag_documents()
+                                            # Try the new Vision + RAG pipeline first
+                                            if VISION_RAG_AVAILABLE:
+                                                try:
+                                                    print(f"[VISION RAG] Using two-stage Vision + RAG pipeline")
+                                                    # Get KB ID from config or environment
+                                                    kb_id = config.get("AWS_KNOWLEDGE_BASE_ID") or os.environ.get("AWS_KNOWLEDGE_BASE_ID", "HVTKAK0Q86")
+                                                    print(f"[VISION RAG] Using Knowledge Base ID: {kb_id}")
+                                                    
+                                                    # Use Vision + RAG pipeline
+                                                    pipeline_result = enhance_vision_analysis_with_rag(
+                                                        image_data=clean_image_data,
+                                                        user_question=user_question,
+                                                        knowledge_base_id=kb_id
+                                                    )
+                                                    
+                                                    if pipeline_result.get("pipeline_success"):
+                                                        # Use the enhanced response from Vision + RAG
+                                                        response_text = pipeline_result.get("enhanced_response", "")
+                                                        vision_info = pipeline_result.get("vision_analysis", {})
+                                                        rag_info = pipeline_result.get("rag_context", {})
+                                                        
+                                                        print(f"[VISION RAG] ✅ Pipeline success - Vision + {rag_info.get('sources_used', 0)} RAG sources")
+                                                        print(f"[VISION RAG] Objects detected: {vision_info.get('objects_detected', [])}")
+                                                        print(f"[VISION RAG] Safety concerns: {vision_info.get('safety_concerns', [])}")
+                                                        
+                                                        # Skip the normal vision processing since we have enhanced results
+                                                        rag_context = f"VISION + RAG ANALYSIS COMPLETE - {rag_info.get('sources_used', 0)} sources used"
+                                                        
+                                                    else:
+                                                        print(f"[VISION RAG] Pipeline failed, falling back to original RAG")
+                                                        # Fallback to original RAG loading
+                                                        rag_context = load_rag_context_for_vision(user_question, "")
+                                                        if not rag_context:
+                                                            rag_context = load_local_rag_documents()
+                                                        
+                                                except Exception as e:
+                                                    print(f"[VISION RAG] Pipeline error: {e}, falling back to original RAG")
+                                                    # Fallback to original RAG loading
+                                                    rag_context = load_rag_context_for_vision(user_question, "")
+                                                    if not rag_context:
+                                                        rag_context = load_local_rag_documents()
+                                            else:
+                                                print(f"[VISION RAG] Pipeline not available, using original RAG")
+                                                # Original RAG loading
+                                                rag_context = load_rag_context_for_vision(user_question, "")
+                                                if not rag_context:
+                                                    rag_context = load_local_rag_documents()
                                             
                                             if rag_context:
                                                 print(f"[RAG] Loaded {len(rag_context)} chars of manufacturing context")

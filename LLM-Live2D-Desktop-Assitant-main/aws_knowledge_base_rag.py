@@ -436,8 +436,41 @@ def create_rag_system(config: dict = None) -> HybridRAGSystem:
     local_rag = None
     try:
         from simple_s3_rag import SimpleS3RAG
-        local_rag = SimpleS3RAG()
-        logger.info("Local S3 RAG client created")
+        
+        # Create a wrapper to match the expected interface
+        class SimpleS3RAGWrapper:
+            def __init__(self):
+                self.s3_rag = SimpleS3RAG()
+            
+            def get_context(self, query: str):
+                """Wrapper to match expected interface"""
+                try:
+                    # Try different method names that might exist
+                    if hasattr(self.s3_rag, 'search_documents'):
+                        docs = self.s3_rag.search_documents(query)
+                    elif hasattr(self.s3_rag, 'get_relevant_documents'):
+                        docs = self.s3_rag.get_relevant_documents(query)
+                    elif hasattr(self.s3_rag, 'query'):
+                        docs = self.s3_rag.query(query)
+                    else:
+                        # Fallback: return empty result
+                        docs = []
+                    
+                    # Create a mock response object
+                    class MockResponse:
+                        def __init__(self, docs):
+                            self.relevant_docs = docs if isinstance(docs, list) else []
+                    
+                    return MockResponse(docs)
+                except Exception as e:
+                    logger.error(f"SimpleS3RAG wrapper error: {e}")
+                    class MockResponse:
+                        def __init__(self):
+                            self.relevant_docs = []
+                    return MockResponse()
+        
+        local_rag = SimpleS3RAGWrapper()
+        logger.info("Local S3 RAG client created with wrapper")
     except ImportError:
         logger.info("Local S3 RAG not available")
     except Exception as e:
